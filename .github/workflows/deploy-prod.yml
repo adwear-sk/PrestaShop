@@ -65,5 +65,9 @@ jobs:
             set -e
             cd /opt/adwear
             docker compose pull app
-            docker compose up -d app
-            docker compose exec -T -u www-data app php bin/console cache:clear --no-warmup
+            docker compose up -d --force-recreate app
+            # PrestaShop's web kernels run in prod; clear ALL kernel caches and
+            # warm the (heavy) prod admin cache via CLI with unlimited memory so
+            # the first web hit doesn't cold-build under PHP's memory_limit.
+            docker compose exec -T -u www-data app sh -c "rm -rf var/cache/*"
+            docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console cache:clear --env=prod
