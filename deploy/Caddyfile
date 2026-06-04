@@ -1,0 +1,14 @@
+# Auto-HTTPS for www.adwear.sk. Caddy obtains + renews Let's Encrypt certs
+# automatically — no certbot, no cron, nothing to remember.
+
+www.adwear.sk {
+	encode zstd gzip
+	reverse_proxy app:80 {
+		header_up X-Forwarded-Proto https
+	}
+}
+
+# Redirect the apex to www (canonical host).
+adwear.sk {
+	redir https://www.adwear.sk{uri} permanent
+}
