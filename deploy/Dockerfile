@@ -61,6 +61,15 @@ WORKDIR /var/www/html
 # off so the live store never runs in debug mode (no stack traces, faster).
 RUN sed -i "s/define('_PS_MODE_DEV_', true)/define('_PS_MODE_DEV_', false)/" config/defines.inc.php
 
+# Trust the reverse proxy (Caddy) so PrestaShop sees HTTPS behind TLS
+# termination. Under Apache/mod_php the docker-compose env var is NOT exposed
+# to PHP's $_SERVER, and the shipped .env sets PS_TRUSTED_PROXIES empty — so
+# Symfony's $request->isSecure() returns false and the BO refuses login with
+# "you cannot connect to the back office until SSL is activated". Setting it in
+# .env.local (loaded by PrestaShop's Dotenv cascade, overriding .env) fixes it.
+RUN echo "PS_TRUSTED_PROXIES=172.16.0.0/12" > .env.local \
+  && chown www-data:www-data .env.local
+
 # The directories PrestaShop writes to at runtime are mounted as volumes in
 # docker-compose; make sure their mount points are owned by www-data.
 RUN mkdir -p img upload download var mails app/config \
