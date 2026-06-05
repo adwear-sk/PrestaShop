@@ -70,6 +70,7 @@ Breaking changes are only allowed in major versions. See [ADR 0017](https://gith
 | `domain-context-generator` | [skills/domain-context-generator/SKILL.md](skills/domain-context-generator/SKILL.md) | "generate context for [Domain]" |
 | `component-context-generator` | [skills/component-context-generator/SKILL.md](skills/component-context-generator/SKILL.md) | "generate context for [Component]" |
 | `create-pr` | [skills/create-pr/SKILL.md](skills/create-pr/SKILL.md) | "create a PR", "open a pull request", "submit a PR" |
+| `scaffold-adwear-repo` | [skills/scaffold-adwear-repo/SKILL.md](skills/scaffold-adwear-repo/SKILL.md) | "create a new module/theme", "scaffold an adwear repo like malfini_api" |
 
 ## Domain contexts
 
