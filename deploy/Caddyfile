@@ -3,6 +3,18 @@
 
 www.adwear.sk {
 	encode zstd gzip
+
+	# Defense-in-depth gate on the back office. Caddy demands HTTP basic-auth
+	# for anything under /admin-dev before the request ever reaches PrestaShop,
+	# so bots scanning for the BO login never see it. The value below is a
+	# one-way bcrypt hash (safe to commit); the plaintext lives only in the
+	# admin's password manager. Front office, webservice, and the API module
+	# are NOT matched and stay public.
+	@admin path /admin-dev /admin-dev/*
+	basic_auth @admin {
+		adwear $2b$14$WRgZumRqdIpqrg5VReNo3e8bdHfBJGyY6pL.gaeJIzAF5Qm1NmYT6
+	}
+
 	reverse_proxy app:80 {
 		header_up X-Forwarded-Proto https
 	}
