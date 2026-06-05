@@ -45,6 +45,8 @@ jobs:
           context: .
           file: deploy/Dockerfile
           push: true
+          build-args: |
+            ADMIN_FOLDER=${{ secrets.ADMIN_FOLDER }}
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}

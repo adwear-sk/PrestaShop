@@ -11,6 +11,9 @@ ARG VERSION="8.1-apache"
 FROM prestashop/base:${VERSION} AS build
 
 ARG NODE_VERSION=20.19.5
+# Unguessable back-office folder name, injected from a CI secret (never committed
+# — the repo is public). Defaults to admin-dev so local/plain builds are unchanged.
+ARG ADMIN_FOLDER=admin-dev
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # Node (for the PrestaShop asset build) + composer
@@ -24,13 +27,22 @@ RUN php -r "copy('https://getcomposer.org/installer','/tmp/c.php');" \
 WORKDIR /var/www/html
 COPY . .
 
+# Rename the back-office folder to the unguessable name BEFORE building, so the
+# admin assets compile under the final path and nothing references admin-dev.
+# PrestaShop derives _PS_ADMIN_DIR_ from the folder itself, so the rename is
+# transparent to the app once the prod cache is rebuilt (done on deploy).
+RUN if [ -n "$ADMIN_FOLDER" ] && [ "$ADMIN_FOLDER" != "admin-dev" ] && [ -d admin-dev ]; then \
+      mv admin-dev "$ADMIN_FOLDER"; \
+    fi
+
 # Native modules + the Classic theme are pulled here (they are gitignored in
 # the repo and resolved from packagist as prestashop/* packages).
 RUN COMPOSER_PROCESS_TIMEOUT=600 COMPOSER_IPRESOLVE=4 \
     composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --no-progress
 
-# Build admin + front assets (admin BO assets are NOT committed, so this is required).
-RUN ./tools/assets/build.sh all --force
+# Build admin + front assets (admin BO assets are NOT committed, so this is
+# required). build.sh reads ADMIN_DIR (default admin-dev) to locate the BO theme.
+RUN ADMIN_DIR="${ADMIN_FOLDER}" ./tools/assets/build.sh all --force
 
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime: plain Apache + the built app. No auto-install.
