@@ -42,6 +42,9 @@ services:
       PS_ENABLE_SSL: "1"
       # Trust Caddy as the TLS-terminating proxy so PrestaShop sees HTTPS.
       PS_TRUSTED_PROXIES: ${PS_TRUSTED_PROXIES:-172.16.0.0/12}
+      # Target shop/language for the malfini_api sync services.
+      PS_SHOP_ID: "1"
+      PS_LANGUAGE_ID: "1"
       # NOTE: Malfini credentials are NOT set here — the module stores them in
       # PrestaShop's configuration (DB), entered via the module's admin page.
     volumes:
