@@ -57,6 +57,20 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+
+      - name: Copy crontab to the VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: deploy/crontab
+          target: /opt/adwear/
+          strip_components: 1
+
       - name: Pull new image & restart on the VPS
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -76,3 +90,5 @@ jobs:
             # Friendly URLs need the PS-generated .htaccess; it lives in the
             # ephemeral container layer, so regenerate it after every recreate.
             docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; Tools::generateHtaccess();"
+            # Install the git-managed cron schedule (deploy/crontab).
+            crontab /opt/adwear/crontab

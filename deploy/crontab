@@ -1,0 +1,16 @@
+# Crontab for the `deploy` user on the VPS — this file is the source of truth.
+# The deploy workflow copies it to /opt/adwear/crontab and installs it with
+# `crontab`, so live edits on the server are overwritten by the next deploy.
+
+# Nightly DB + files backup
+15 3 * * * /opt/adwear/backup.sh >> /opt/adwear/backups/backup.log 2>&1
+
+# Malfini syncs. flock skips a run while the previous one still holds the
+# lock. Daily order: new products (04:00) get prices (05:00) and go live with
+# the next hourly stock run — until then VisibilitySyncer keeps them hidden.
+30 * * * * cd /opt/adwear && flock -n /tmp/malfini-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-stock >> logs/cron-stock.log 2>&1
+0 4 * * * cd /opt/adwear && flock -n /tmp/malfini-products.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-products >> logs/cron-products.log 2>&1
+0 5 * * * cd /opt/adwear && flock -n /tmp/malfini-prices.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-prices >> logs/cron-prices.log 2>&1
+
+# Forced product refresh (--force, applies mapping/data changes to existing
+# products) is intentionally NOT scheduled — run it manually when needed.
