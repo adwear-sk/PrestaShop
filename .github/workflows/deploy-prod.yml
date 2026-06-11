@@ -73,3 +73,6 @@ jobs:
             # the first web hit doesn't cold-build under PHP's memory_limit.
             docker compose exec -T -u www-data app sh -c "rm -rf var/cache/*"
             docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console cache:clear --env=prod
+            # Friendly URLs need the PS-generated .htaccess; it lives in the
+            # ephemeral container layer, so regenerate it after every recreate.
+            docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; Tools::generateHtaccess();"
