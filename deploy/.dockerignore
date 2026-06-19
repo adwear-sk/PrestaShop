@@ -1,0 +1,20 @@
+# Keep the build context small + reproducible. CI builds from a clean checkout,
+# so these would either be absent or must NOT leak into the image.
+.git
+.github
+.idea
+.cursor
+.windsurf
+.ai
+.claude
+node_modules
+**/node_modules
+vendor
+themes/classic
+themes/*/assets
+var/cache
+var/logs
+tests
+deploy/.env*
+docker-compose*.yml
+*.md

@@ -1,0 +1,94 @@
+# Build the PrestaShop image and deploy it to www.adwear.sk.
+# Trigger: push to the `production` branch (merge develop -> production to ship),
+# or run manually from the Actions tab.
+#
+# Required repo secrets:
+#   SSH_HOST   - VPS IP / hostname
+#   SSH_USER   - deploy
+#   SSH_KEY    - private SSH key whose public half is in the deploy user's authorized_keys
+name: Deploy to production
+
+on:
+  push:
+    branches: [ production ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/prestashop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          build-args: |
+            ADMIN_FOLDER=${{ secrets.ADMIN_FOLDER }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+
+      - name: Copy crontab to the VPS
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: deploy/crontab
+          target: /opt/adwear/
+          strip_components: 1
+
+      - name: Pull new image & restart on the VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/adwear
+            docker compose pull app
+            docker compose up -d --force-recreate app
+            # PrestaShop's web kernels run in prod; clear ALL kernel caches and
+            # warm the (heavy) prod admin cache via CLI with unlimited memory so
+            # the first web hit doesn't cold-build under PHP's memory_limit.
+            docker compose exec -T -u www-data app sh -c "rm -rf var/cache/*"
+            docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console cache:clear --env=prod
+            # Friendly URLs need the PS-generated .htaccess; it lives in the
+            # ephemeral container layer, so regenerate it after every recreate.
+            docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; Tools::generateHtaccess();"
+            # Install the git-managed cron schedule (deploy/crontab).
+            crontab /opt/adwear/crontab

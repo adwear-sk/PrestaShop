@@ -1,0 +1,100 @@
+# Production stack for www.adwear.sk — lives on the VPS at /opt/adwear/
+#
+#   caddy  -> terminates TLS (auto Let's Encrypt), proxies to app:80
+#   app    -> the PrestaShop image built in CI and pulled from GHCR
+#   mysql  -> database, persisted in a named volume
+#
+# Customer data (img/upload/download/var/mails) and the install config
+# (app/config) live in named volumes so they survive image updates.
+# Your custom modules + theme are bind-mounted from ./custom (rsynced in by
+# their own repos' deploy workflows).
+
+name: adwear
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    networks:
+      - web
+
+  app:
+    image: ${APP_IMAGE:-ghcr.io/adwear-sk/prestashop:latest}
+    restart: unless-stopped
+    environment:
+      # PrestaShop reads DB creds from app/config/parameters.php after install;
+      # these are used by the one-time CLI installer (see README).
+      DB_SERVER: mysql
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWD: ${DB_PASSWD}
+      DB_PREFIX: ${DB_PREFIX:-ps_}
+      PS_DOMAIN: ${PS_DOMAIN}
+      PS_ENABLE_SSL: "1"
+      # Trust Caddy as the TLS-terminating proxy so PrestaShop sees HTTPS.
+      PS_TRUSTED_PROXIES: ${PS_TRUSTED_PROXIES:-172.16.0.0/12}
+      # Target shop/language for the malfini_api sync services.
+      PS_SHOP_ID: "1"
+      PS_LANGUAGE_ID: "1"
+      # NOTE: Malfini credentials are NOT set here — the module stores them in
+      # PrestaShop's configuration (DB), entered via the module's admin page.
+    volumes:
+      - ps-img:/var/www/html/img
+      - ps-upload:/var/www/html/upload
+      - ps-download:/var/www/html/download
+      - ps-var:/var/www/html/var
+      - ps-mails:/var/www/html/mails
+      - ps-config:/var/www/html/app/config
+      # Custom code — deployed separately, overlays only these subpaths.
+      - ./custom/modules/category_migrator:/var/www/html/modules/category_migrator
+      - ./custom/modules/malfini_api:/var/www/html/modules/malfini_api
+      - ./custom/themes/adwear:/var/www/html/themes/adwear
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - web
+      - internal
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command: --mysql-native-password=ON
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWD}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+volumes:
+  caddy-data:
+  caddy-config:
+  db-data:
+  ps-img:
+  ps-upload:
+  ps-download:
+  ps-var:
+  ps-mails:
+  ps-config:
+
+networks:
+  web:
+  internal:
