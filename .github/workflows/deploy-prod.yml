@@ -82,6 +82,9 @@ jobs:
             cd /opt/adwear
             docker compose pull app
             docker compose up -d --force-recreate app
+            # Reclaim the previous :latest image, now dangling after the pull.
+            # Without this, every deploy left a ~4 GB orphan image behind.
+            docker image prune -f
             # PrestaShop's web kernels run in prod; clear ALL kernel caches and
             # warm the (heavy) prod admin cache via CLI with unlimited memory so
             # the first web hit doesn't cold-build under PHP's memory_limit.

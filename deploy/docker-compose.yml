@@ -31,6 +31,11 @@ services:
     image: ${APP_IMAGE:-ghcr.io/adwear-sk/prestashop:latest}
     restart: unless-stopped
     environment:
+      # Symfony runtime environment for the WEB kernel. Without this the kernel
+      # defaults to "dev", which logs every SQL query (doctrine.DEBUG) and skips
+      # the compiled container — it silently filled the disk and slowed the site.
+      # Note: this is separate from PrestaShop's legacy _PS_MODE_DEV_ flag.
+      APP_ENV: prod
       # PrestaShop reads DB creds from app/config/parameters.php after install;
       # these are used by the one-time CLI installer (see README).
       DB_SERVER: mysql

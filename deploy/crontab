@@ -14,3 +14,9 @@
 
 # Forced product refresh (--force, applies mapping/data changes to existing
 # products) is intentionally NOT scheduled — run it manually when needed.
+
+# Housekeeping — nothing else prunes logs. With APP_ENV=prod they stay small,
+# but cap them anyway: drop app logs older than 14 days (inside the container),
+# and truncate any malfini cron log on the host that grows past 20 MB.
+50 3 * * * cd /opt/adwear && docker compose exec -T -u www-data app find var/logs -name '*.log' -mtime +14 -delete >/dev/null 2>&1
+55 3 * * * find /opt/adwear/logs -name '*.log' -size +20M -exec truncate -s 0 {} \; >/dev/null 2>&1
