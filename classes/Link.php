@@ -180,10 +180,20 @@ class LinkCore
             $product = $this->getProductObject($product, $idLang, $idShop);
         }
         $params['rewrite'] = (!$alias) ? $product->getFieldByLang('link_rewrite') : $alias;
-        if (!$ean13) {
-            $product = $this->getProductObject($product, $idLang, $idShop);
+        // Only feed ean13 when the route actually uses it, exactly like the
+        // optional keywords below. Product::$definition declares ean13 without
+        // allow_null, so ObjectModel coerces an unset value to '' rather than
+        // null — and Dispatcher::createUrl() appends every param that is not a
+        // keyword of the computed route to the query string. http_build_query()
+        // drops nulls but keeps '', so with the default product route (which
+        // has no {ean13}) each product URL gained a trailing "?ean13=" and
+        // canonicalRedirection() then bounced every product page view.
+        if ($dispatcher->hasKeyword('product_rule', $idLang, 'ean13', $idShop)) {
+            if (!$ean13) {
+                $product = $this->getProductObject($product, $idLang, $idShop);
+            }
+            $params['ean13'] = (!$ean13) ? $product->ean13 : $ean13;
         }
-        $params['ean13'] = (!$ean13) ? $product->ean13 : $ean13;
         if ($dispatcher->hasKeyword('product_rule', $idLang, 'meta_title', $idShop)) {
             $product = $this->getProductObject($product, $idLang, $idShop);
             $params['meta_title'] = Tools::str2url($product->getFieldByLang('meta_title'));
