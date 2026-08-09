@@ -8,7 +8,19 @@
 # Malfini syncs. flock skips a run while the previous one still holds the
 # lock. Daily order: new products (04:00) get prices (05:00) and go live with
 # the next hourly stock run — until then VisibilitySyncer keeps them hidden.
-30 * * * * cd /opt/adwear && flock -n /tmp/malfini-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-stock >> logs/cron-stock.log 2>&1
+#
+# Stock runs 07:30-21:30 UTC only (09:30-23:30 CEST). /product/availabilities
+# returns one row per code stamped with the current date, and Malfini rebuilds
+# that snapshot in an overnight batch: after midnight CEST every row comes back
+# with quantity 0. Those zeros are indistinguishable from a real sell-out, so
+# the sync used to write them and VisibilitySyncer then deactivated the entire
+# catalogue until the morning run restored it.
+# Observed: 00:30 CEST good (0 updates), 01:30 CEST all-zero (14009 updates),
+# 09:30 CEST good — so the flip is somewhere in 00:30-01:30 CEST. The window
+# stops at 23:30 CEST to keep an hour of margin rather than rely on the single
+# 00:30 sample. Evening runs write nothing anyway. Do not widen without
+# re-measuring the boundary.
+30 7-21 * * * cd /opt/adwear && flock -n /tmp/malfini-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-stock >> logs/cron-stock.log 2>&1
 0 4 * * * cd /opt/adwear && flock -n /tmp/malfini-products.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-products >> logs/cron-products.log 2>&1
 0 5 * * * cd /opt/adwear && flock -n /tmp/malfini-prices.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-prices >> logs/cron-prices.log 2>&1
 
