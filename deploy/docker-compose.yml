@@ -36,6 +36,11 @@ services:
       # the compiled container — it silently filled the disk and slowed the site.
       # Note: this is separate from PrestaShop's legacy _PS_MODE_DEV_ flag.
       APP_ENV: prod
+      # Same, for the CLI. bin/console does NOT read APP_ENV — it resolves the
+      # environment as getenv('SYMFONY_ENV') ?: 'dev', so the sync crons kept
+      # booting dev+debug (~275 MB/day of var/logs/dev-*.log) long after
+      # APP_ENV fixed the web kernel.
+      SYMFONY_ENV: prod
       # PrestaShop reads DB creds from app/config/parameters.php after install;
       # these are used by the one-time CLI installer (see README).
       DB_SERVER: mysql
