@@ -9,18 +9,24 @@
 # lock. Daily order: new products (04:00) get prices (05:00) and go live with
 # the next hourly stock run — until then VisibilitySyncer keeps them hidden.
 #
-# Stock runs 07:30-21:30 UTC only (09:30-23:30 CEST). /product/availabilities
-# returns one row per code stamped with the current date, and Malfini rebuilds
-# that snapshot in an overnight batch: after midnight CEST every row comes back
-# with quantity 0. Those zeros are indistinguishable from a real sell-out, so
-# the sync used to write them and VisibilitySyncer then deactivated the entire
-# catalogue until the morning run restored it.
-# Observed: 00:30 CEST good (0 updates), 01:30 CEST all-zero (14009 updates),
-# 09:30 CEST good — so the flip is somewhere in 00:30-01:30 CEST. The window
-# stops at 23:30 CEST to keep an hour of margin rather than rely on the single
-# 00:30 sample. Evening runs write nothing anyway. Do not widen without
-# re-measuring the boundary.
-30 7-21 * * * cd /opt/adwear && flock -n /tmp/malfini-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-stock >> logs/cron-stock.log 2>&1
+# Stock skips only the 23:30 UTC slot. /product/availabilities returns one row
+# per code stamped with the current date and, with includeFuture=false, only
+# rows for today; Malfini rebuilds that snapshot overnight and while it does,
+# every row comes back with quantity 0 — indistinguishable from a real
+# sell-out. Writing those zeros used to deactivate the whole catalogue until
+# the next run restored it.
+# Measured by sampling the feed every 30 min for 24h (2026-08-09/10):
+#   21:30Z  18.9% zeros, all dated D      good
+#   22:00Z  18.9% zeros, dates D + D+1    good (date rolls over gradually,
+#                                         so date alone is NOT a usable signal)
+#   23:00Z  100% zeros, all dated D+1     UNUSABLE
+#   23:30Z  100% zeros, all dated D+1     UNUSABLE
+#   00:00Z  18.9% zeros, all dated D+1    good
+# So the bad window is ~23:00-23:59 UTC — one hour, not the whole night. The
+# old 7h runtimes made it look wider: the 23:30 run spent all night *writing*
+# zeros it fetched in one instant. StockSyncer also refuses any feed that is
+# >=90% zeros, so this schedule is defence in depth rather than the only guard.
+30 0-22 * * * cd /opt/adwear && flock -n /tmp/malfini-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-stock >> logs/cron-stock.log 2>&1
 0 4 * * * cd /opt/adwear && flock -n /tmp/malfini-products.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-products >> logs/cron-products.log 2>&1
 0 5 * * * cd /opt/adwear && flock -n /tmp/malfini-prices.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-prices >> logs/cron-prices.log 2>&1
 
