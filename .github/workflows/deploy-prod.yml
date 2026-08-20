@@ -85,6 +85,13 @@ jobs:
             # Reclaim the previous :latest image, now dangling after the pull.
             # Without this, every deploy left a ~4 GB orphan image behind.
             docker image prune -f
+            # Symfony XLF translation packs live in translations/<locale>, which
+            # is in the ephemeral container layer (no named volume), so a recreate
+            # wipes them. Without them the BO translation API 400s and the
+            # "Modify translations" page just renders "undefined". Re-fetch any
+            # locale whose catalogue is missing. Runs BEFORE the cache clear
+            # below because installSfLanguagePack() calls Tools::clearSf2Cache().
+            docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; foreach (Language::getLanguages(false) as \$l) { \$loc = \$l['locale']; if (!\$loc || is_dir(_PS_ROOT_DIR_ . '/translations/' . \$loc)) { continue; } \$e = []; if (Language::downloadLanguagePack(\$l['iso_code'], _PS_VERSION_, \$e)) { Language::installSfLanguagePack(\$loc, \$e); } echo 'translations ' . \$loc . ': ' . (\$e ? implode('; ', \$e) : 'restored') . PHP_EOL; }"
             # PrestaShop's web kernels run in prod; clear ALL kernel caches and
             # warm the (heavy) prod admin cache via CLI with unlimited memory so
             # the first web hit doesn't cold-build under PHP's memory_limit.
