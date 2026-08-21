@@ -36,5 +36,14 @@
 # Housekeeping — nothing else prunes logs. With APP_ENV=prod they stay small,
 # but cap them anyway: drop app logs older than 14 days (inside the container),
 # and truncate any malfini cron log on the host that grows past 20 MB.
+#
+# The DB log table (ps_log) needs its own prune: core ships no retention policy
+# for it at all, only the BO "Erase all logs" button, which is a TRUNCATE. And
+# it is not just a disk concern — PrestaShopLogger::isPresent() runs an
+# unindexed COUNT(*) on every single write, so a large ps_log slows the stock
+# sync until flock starts skipping runs. prune-logs.sh keeps 90 days and caps
+# the table at 200k rows; see the header there. Runs at 03:45, i.e. AFTER the
+# 03:15 backup, so the nightly dump still holds a copy of whatever it removes.
+45 3 * * * /opt/adwear/prune-logs.sh >> /opt/adwear/logs/cron-prune-logs.log 2>&1
 50 3 * * * cd /opt/adwear && docker compose exec -T -u www-data app find var/logs -name '*.log' -mtime +14 -delete >/dev/null 2>&1
 55 3 * * * find /opt/adwear/logs -name '*.log' -size +20M -exec truncate -s 0 {} \; >/dev/null 2>&1
