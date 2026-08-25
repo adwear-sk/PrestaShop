@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(docker exec adwearpresta-prestashop-git-1 *)",
-      "Bash(docker exec adwearpresta-mysql-1 *)"
-    ]
-  }
-}
