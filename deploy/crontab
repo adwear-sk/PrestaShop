@@ -47,3 +47,11 @@
 45 3 * * * /opt/adwear/prune-logs.sh >> /opt/adwear/logs/cron-prune-logs.log 2>&1
 50 3 * * * cd /opt/adwear && docker compose exec -T -u www-data app find var/logs -name '*.log' -mtime +14 -delete >/dev/null 2>&1
 55 3 * * * find /opt/adwear/logs -name '*.log' -size +20M -exec truncate -s 0 {} \; >/dev/null 2>&1
+
+# Back-office health check. The front office and back office run separate
+# Symfony kernels, so the BO can be 500ing on every page while the homepage
+# serves 200 — which is exactly how the 2026-10-03 outage stayed invisible for
+# four days. Nothing else here watches the BO. Logs only failures and
+# recoveries; see the header of healthcheck.sh for the self-heal switch
+# (AUTO_RESTART=1), which is off by default.
+*/5 * * * * /opt/adwear/healthcheck.sh >> /opt/adwear/logs/cron-healthcheck.log 2>&1

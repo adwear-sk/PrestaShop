@@ -67,7 +67,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "deploy/crontab,deploy/prune-logs.sh"
+          source: "deploy/crontab,deploy/prune-logs.sh,deploy/healthcheck.sh"
           target: /opt/adwear/
           strip_components: 1
 
@@ -102,6 +102,6 @@ jobs:
             docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; Tools::generateHtaccess();"
             # scp does not preserve the exec bit, and the 03:45 cron calls
             # this script directly.
-            chmod +x /opt/adwear/prune-logs.sh
+            chmod +x /opt/adwear/prune-logs.sh /opt/adwear/healthcheck.sh
             # Install the git-managed cron schedule (deploy/crontab).
             crontab /opt/adwear/crontab
