@@ -68,6 +68,7 @@ services:
       - ./custom/modules/category_migrator:/var/www/html/modules/category_migrator
       - ./custom/modules/malfini_api:/var/www/html/modules/malfini_api
       - ./custom/modules/adwear_withdrawal:/var/www/html/modules/adwear_withdrawal
+      - ./custom/modules/adwear_paybysquare:/var/www/html/modules/adwear_paybysquare
       - ./custom/themes/adwear:/var/www/html/themes/adwear
     depends_on:
       mysql:
