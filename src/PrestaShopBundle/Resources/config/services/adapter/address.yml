@@ -65,3 +65,13 @@ services:
     arguments:
       - '@doctrine.dbal.default_connection'
       - '%database_prefix%'
+
+  # Adwear: DIČ field on the back-office address form (hook subscriber, not a kernel listener)
+  PrestaShop\PrestaShop\Adapter\Address\AddressDicHookSubscriber:
+    public: false
+    arguments:
+      - '@doctrine.dbal.default_connection'
+      - '%database_prefix%'
+      - '@translator'
+    tags:
+      - { name: core.legacy.hook.subscriber }
