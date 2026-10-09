@@ -92,20 +92,23 @@ jobs:
             # locale whose catalogue is missing. Runs BEFORE the cache clear
             # below because installSfLanguagePack() calls Tools::clearSf2Cache().
             docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; foreach (Language::getLanguages(false) as \$l) { \$loc = \$l['locale']; if (!\$loc || is_dir(_PS_ROOT_DIR_ . '/translations/' . \$loc)) { continue; } \$e = []; if (Language::downloadLanguagePack(\$l['iso_code'], _PS_VERSION_, \$e)) { Language::installSfLanguagePack(\$loc, \$e); } echo 'translations ' . \$loc . ': ' . (\$e ? implode('; ', \$e) : 'restored') . PHP_EOL; }"
+            # The mail layouts (mails/themes) are git-managed but sit in the mails
+            # volume, so sync them in from the image. Must run BEFORE the cache
+            # clear: cache:clear warms the prod Twig cache, which never
+            # revalidates (no auto_reload), so layouts copied in afterwards are
+            # ignored by the generator below. Non-fatal like the generation.
+            docker compose exec -T -u www-data app cp -a /usr/local/share/adwear-mail-themes/. mails/themes/ || echo "WARNING: mail layout sync failed"
             # PrestaShop's web kernels run in prod; clear ALL kernel caches and
             # warm the (heavy) prod admin cache via CLI with unlimited memory so
             # the first web hit doesn't cold-build under PHP's memory_limit.
             docker compose exec -T -u www-data app sh -c "rm -rf var/cache/*"
             docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console cache:clear --env=prod
-            # Mail templates are generated from the layouts in mails/themes, which
-            # are git-managed but sit in the mails volume, so sync them in from
-            # the image first. Module templates (modules/*/mails/sk) live in the
-            # ephemeral container layer, so a recreate wipes them and those mails
-            # fall back to English. --overwrite regenerates everything so layout
-            # changes (e.g. the footer) reach already-generated templates.
-            # Non-fatal: stale mails beat skipping the .htaccess and crontab
-            # steps below.
-            docker compose exec -T -u www-data app sh -c "cp -a /usr/local/share/adwear-mail-themes/. mails/themes/ && php -d memory_limit=-1 bin/console prestashop:mail:generate modern sk --overwrite --env=prod" || echo "WARNING: mail template sync/generation failed"
+            # Module templates (modules/*/mails/sk) live in the ephemeral
+            # container layer, so a recreate wipes them and those mails fall back
+            # to English. --overwrite regenerates everything so layout changes
+            # (e.g. the footer) reach already-generated templates. Non-fatal:
+            # stale mails beat skipping the .htaccess and crontab steps below.
+            docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console prestashop:mail:generate modern sk --overwrite --env=prod || echo "WARNING: mail template generation failed"
             # Friendly URLs need the PS-generated .htaccess; it lives in the
             # ephemeral container layer, so regenerate it after every recreate.
             docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; Tools::generateHtaccess();"
