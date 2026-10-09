@@ -97,13 +97,15 @@ jobs:
             # the first web hit doesn't cold-build under PHP's memory_limit.
             docker compose exec -T -u www-data app sh -c "rm -rf var/cache/*"
             docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console cache:clear --env=prod
-            # Module mail templates (modules/*/mails/sk) live in the ephemeral
-            # container layer, so a recreate wipes them and those mails fall back
-            # to English. Regenerate the missing ones from the translations; no
-            # --overwrite, so existing templates (incl. edits in the mails
-            # volume) are kept. Non-fatal: English mails beat skipping the
-            # .htaccess and crontab steps below.
-            docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console prestashop:mail:generate modern sk --env=prod || echo "WARNING: mail template generation failed"
+            # Mail templates are generated from the layouts in mails/themes, which
+            # are git-managed but sit in the mails volume, so sync them in from
+            # the image first. Module templates (modules/*/mails/sk) live in the
+            # ephemeral container layer, so a recreate wipes them and those mails
+            # fall back to English. --overwrite regenerates everything so layout
+            # changes (e.g. the footer) reach already-generated templates.
+            # Non-fatal: stale mails beat skipping the .htaccess and crontab
+            # steps below.
+            docker compose exec -T -u www-data app sh -c "cp -a /usr/local/share/adwear-mail-themes/. mails/themes/ && php -d memory_limit=-1 bin/console prestashop:mail:generate modern sk --overwrite --env=prod" || echo "WARNING: mail template sync/generation failed"
             # Friendly URLs need the PS-generated .htaccess; it lives in the
             # ephemeral container layer, so regenerate it after every recreate.
             docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; Tools::generateHtaccess();"

@@ -70,6 +70,10 @@ RUN sed -i "s/define('_PS_MODE_DEV_', true)/define('_PS_MODE_DEV_', false)/" con
 RUN echo "PS_TRUSTED_PROXIES=172.16.0.0/12" > .env.local \
   && chown www-data:www-data .env.local
 
+# mails/ is a named volume, which hides the image's mails/themes (the git-managed
+# mail layouts). Keep a copy outside it so the deploy can sync them in.
+RUN cp -a mails/themes /usr/local/share/adwear-mail-themes
+
 # The directories PrestaShop writes to at runtime are mounted as volumes in
 # docker-compose; make sure their mount points are owned by www-data.
 RUN mkdir -p img upload download var mails app/config \
