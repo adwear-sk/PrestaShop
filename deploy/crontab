@@ -45,6 +45,13 @@
 # the table at 200k rows; see the header there. Runs at 03:45, i.e. AFTER the
 # 03:15 backup, so the nightly dump still holds a copy of whatever it removes.
 45 3 * * * /opt/adwear/prune-logs.sh >> /opt/adwear/logs/cron-prune-logs.log 2>&1
+#
+# prune-visitors.sh clears the crawler backlog from the visitor statistics
+# (ps_guest / ps_connections / ps_connections_source): rows written before the
+# 2026-10-12 bot filter, ~30k a day of them. Batched with a 40-minute budget,
+# so the first nights work through the 3M-row backlog; after that it is a
+# no-op. Also after the backup, for the same reason; see the header there.
+47 3 * * * flock -n /tmp/prune-visitors.lock /opt/adwear/prune-visitors.sh >> /opt/adwear/logs/cron-prune-visitors.log 2>&1
 50 3 * * * cd /opt/adwear && docker compose exec -T -u www-data app find var/logs -name '*.log' -mtime +14 -delete >/dev/null 2>&1
 55 3 * * * find /opt/adwear/logs -name '*.log' -size +20M -exec truncate -s 0 {} \; >/dev/null 2>&1
 
