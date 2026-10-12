@@ -159,6 +159,8 @@ override/*
 !override/classes/
 override/classes/*
 !override/classes/Address.php
+!override/classes/Connection.php
+!override/classes/Guest.php
 themes/*/
 themes/classic
 !themes/_core
