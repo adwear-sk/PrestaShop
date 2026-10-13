@@ -12,6 +12,15 @@ ssh deploy@178.105.70.62 'cd /opt/adwear && docker compose cp /tmp/potlac-a-bran
   && docker compose exec -T -u www-data -e SYMFONY_ENV=prod app php /tmp/potlac-a-branding/upsert.php'
 ```
 
+Then add the "Chcem potlač!" main-menu link (needs the page to exist; idempotent):
+
+```sh
+ssh deploy@178.105.70.62 'cd /opt/adwear && docker compose exec -T -u www-data app php /tmp/potlac-a-branding/menu-link.php'
+```
+
+The blue button look comes from the theme (`_mainmenu.scss`, selector
+`lnk-chcem-potlac`), so the theme must be deployed too.
+
 `upsert.php` creates the page (CMS category 1, slug `potlac-a-branding`) or, if it
 exists, replaces its content and meta description, then clears the Smarty cache.
 
