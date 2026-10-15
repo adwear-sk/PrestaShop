@@ -168,6 +168,15 @@ override/controllers/front/*
 !override/controllers/front/listing/
 override/controllers/front/listing/*
 !override/controllers/front/listing/SearchController.php
+!override/modules/
+override/modules/*
+!override/modules/ps_emailalerts/
+override/modules/ps_emailalerts/*
+!override/modules/ps_emailalerts/controllers/
+override/modules/ps_emailalerts/controllers/*
+!override/modules/ps_emailalerts/controllers/front/
+override/modules/ps_emailalerts/controllers/front/*
+!override/modules/ps_emailalerts/controllers/front/account.php
 themes/*/
 themes/classic
 !themes/_core
