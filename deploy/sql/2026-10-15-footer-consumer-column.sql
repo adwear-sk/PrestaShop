@@ -17,3 +17,9 @@ WHERE id_link_block = 2;
 UPDATE ps_link_block_lang
 SET custom_content = '[{"title":"Chcem potla\\u010d!","url":"\\/content\\/9-potlac-a-branding"}]'
 WHERE id_link_block = 2;
+
+-- The sitemap's friendly URL was "mapa stránky" (with a space); the footer now links it.
+UPDATE ps_meta_lang ml
+JOIN ps_meta m ON m.id_meta = ml.id_meta
+SET ml.url_rewrite = 'mapa-stranky'
+WHERE m.page = 'sitemap';
