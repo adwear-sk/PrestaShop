@@ -3,6 +3,7 @@
  * Adds stock status and a "from" price to the AJAX search results used by
  * the header search flyout. The core whitelist (SearchResultProductFilter)
  * drops every stock field, so they are computed here and merged back in.
+ * The "from" price comes from the ProductListingFrontController override.
  */
 class SearchController extends SearchControllerCore
 {
@@ -48,25 +49,9 @@ class SearchController extends SearchControllerCore
             $stock[(int) $row['id_product']] = (int) $row['quantity'];
         }
 
-        // Cheapest combination per product, only where the combination prices differ.
-        $cheapest = [];
-        foreach ($db->executeS(
-            'SELECT id_product, id_product_attribute, price FROM ' . _DB_PREFIX_ . 'product_attribute_shop
-            WHERE id_product IN (' . $in . ') AND id_shop = ' . $idShop . '
-            ORDER BY id_product, price ASC, id_product_attribute ASC'
-        ) ?: [] as $row) {
-            $id = (int) $row['id_product'];
-            if (!isset($cheapest[$id])) {
-                $cheapest[$id] = ['ipa' => (int) $row['id_product_attribute'], 'min' => (float) $row['price'], 'max' => (float) $row['price']];
-            }
-            $cheapest[$id]['max'] = (float) $row['price'];
-        }
+        $fromPrices = $this->getAdwFromPrices($ids);
 
         $lastQties = (int) Configuration::get('PS_LAST_QTIES');
-        $useTax = Product::getTaxCalculationMethod((int) $this->context->cookie->id_customer) == PS_TAX_INC;
-        $locale = $this->context->getCurrentLocale();
-        $currency = $this->context->currency->iso_code;
-
         $extras = [];
         foreach ($ids as $id) {
             $qty = $stock[$id] ?? 0;
@@ -81,18 +66,10 @@ class SearchController extends SearchControllerCore
                 $label = 'Skladom';
             }
 
-            $fromPrice = null;
-            if (isset($cheapest[$id]) && $cheapest[$id]['min'] != $cheapest[$id]['max']) {
-                $fromPrice = $locale->formatPrice(
-                    Product::getPriceStatic($id, $useTax, $cheapest[$id]['ipa']),
-                    $currency
-                );
-            }
-
             $extras[$id] = [
                 'adw_stock' => $level,
                 'adw_stock_label' => $label,
-                'adw_from_price' => $fromPrice,
+                'adw_from_price' => $fromPrices[$id] ?? null,
             ];
         }
 

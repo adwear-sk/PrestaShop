@@ -161,6 +161,9 @@ override/classes/*
 !override/classes/Address.php
 !override/classes/Connection.php
 !override/classes/Guest.php
+!override/classes/controller/
+override/classes/controller/*
+!override/classes/controller/ProductListingFrontController.php
 !override/controllers/
 override/controllers/*
 !override/controllers/front/
