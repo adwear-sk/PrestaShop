@@ -3,7 +3,7 @@
  * Adds stock status and a "from" price to the AJAX search results used by
  * the header search flyout. The core whitelist (SearchResultProductFilter)
  * drops every stock field, so they are computed here and merged back in.
- * The "from" price comes from the ProductListingFrontController override.
+ * The "from" price comes from the ProductAssembler override.
  */
 class SearchController extends SearchControllerCore
 {
@@ -49,7 +49,7 @@ class SearchController extends SearchControllerCore
             $stock[(int) $row['id_product']] = (int) $row['quantity'];
         }
 
-        $fromPrices = $this->getAdwFromPrices($ids);
+        $fromPrices = ProductAssembler::getAdwFromPrices($ids, $this->context);
 
         $lastQties = (int) Configuration::get('PS_LAST_QTIES');
         $extras = [];
