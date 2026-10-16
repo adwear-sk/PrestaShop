@@ -72,6 +72,7 @@ services:
       - ./custom/modules/ps_adwearslider:/var/www/html/modules/ps_adwearslider
       - ./custom/modules/ps_adwearreassurance:/var/www/html/modules/ps_adwearreassurance
       - ./custom/modules/ps_adwearbrands:/var/www/html/modules/ps_adwearbrands
+      - ./custom/modules/ps_adwearshare:/var/www/html/modules/ps_adwearshare
       - ./custom/themes/adwear:/var/www/html/themes/adwear
     depends_on:
       mysql:
