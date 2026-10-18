@@ -52,3 +52,37 @@ JOIN (
     WHERE modules.class_name = 'AdminParentModulesSf'
 ) renumbered ON renumbered.id_tab = tab.id_tab
 SET tab.position = renumbered.new_position;
+
+-- Adwear Share (ps_adwearshare): its settings form as a page of the menu,
+-- after the tabs already under "Nástroje". Same rows as the module's
+-- $this->tabs registers on install, so a reinstall finds nothing to add.
+INSERT INTO ps_tab (id_parent, position, module, class_name, route_name, active, enabled, icon, wording, wording_domain)
+SELECT toolkit.id_tab,
+       (SELECT IFNULL(MAX(sibling.position), -1) + 1 FROM ps_tab sibling WHERE sibling.id_parent = toolkit.id_tab),
+       'ps_adwearshare', 'AdminAdwearShare', '', 1, 1, '', 'Adwear Share', 'Modules.Psadwearshare.Admin'
+FROM ps_tab toolkit
+WHERE toolkit.class_name = 'AdminAdwearToolkit'
+  AND EXISTS (SELECT 1 FROM ps_module WHERE name = 'ps_adwearshare')
+  AND NOT EXISTS (SELECT 1 FROM ps_tab existing WHERE existing.class_name = 'AdminAdwearShare');
+
+INSERT INTO ps_tab_lang (id_tab, id_lang, name)
+SELECT tab.id_tab, lang.id_lang, 'Adwear Share'
+FROM ps_tab tab
+CROSS JOIN ps_lang lang
+WHERE tab.class_name = 'AdminAdwearShare'
+  AND NOT EXISTS (SELECT 1 FROM ps_tab_lang existing WHERE existing.id_tab = tab.id_tab AND existing.id_lang = lang.id_lang);
+
+INSERT INTO ps_authorization_role (slug)
+SELECT CONCAT('ROLE_MOD_TAB_ADMINADWEARSHARE_', action.name)
+FROM (SELECT 'CREATE' AS name UNION ALL SELECT 'READ' UNION ALL SELECT 'UPDATE' UNION ALL SELECT 'DELETE') action
+WHERE EXISTS (SELECT 1 FROM ps_tab WHERE class_name = 'AdminAdwearShare')
+  AND NOT EXISTS (SELECT 1 FROM ps_authorization_role existing WHERE existing.slug = CONCAT('ROLE_MOD_TAB_ADMINADWEARSHARE_', action.name));
+
+INSERT INTO ps_access (id_profile, id_authorization_role)
+SELECT DISTINCT access.id_profile, role.id_authorization_role
+FROM ps_authorization_role role
+JOIN ps_authorization_role sibling_role
+  ON sibling_role.slug = REPLACE(role.slug, 'ROLE_MOD_TAB_ADMINADWEARSHARE_', 'ROLE_MOD_TAB_ADMINCATEGORYMIGRATOR_')
+JOIN ps_access access ON access.id_authorization_role = sibling_role.id_authorization_role
+WHERE role.slug LIKE 'ROLE\_MOD\_TAB\_ADMINADWEARSHARE\_%'
+  AND NOT EXISTS (SELECT 1 FROM ps_access existing WHERE existing.id_profile = access.id_profile AND existing.id_authorization_role = role.id_authorization_role);
