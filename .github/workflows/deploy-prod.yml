@@ -97,6 +97,12 @@ jobs:
             # translations and config pick them up. A failing file fails the deploy.
             chmod +x /opt/adwear/migrate.sh
             /opt/adwear/migrate.sh
+            # Keep 3 days of binlogs (MySQL default is 30). There is no replica,
+            # and at the default they took 21 GB of the disk in the 2026-11-04
+            # outage. Set here as root because migrate.sh runs as the shop user,
+            # and with SET PERSIST because it needs no MySQL restart: a restart
+            # under traffic can compile a container with no modules in it.
+            docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -e "SET PERSIST binlog_expire_logs_seconds = 259200"' || echo "WARNING: binlog retention not set"
             # The mail layouts (mails/themes) are git-managed but sit in the mails
             # volume, so sync them in from the image. Must run BEFORE the cache
             # clear: cache:clear warms the prod Twig cache, which never
@@ -117,6 +123,11 @@ jobs:
             # Friendly URLs need the PS-generated .htaccess; it lives in the
             # ephemeral container layer, so regenerate it after every recreate.
             docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; Tools::generateHtaccess();"
+            # robots.txt is in the same ephemeral layer, and without it crawlers
+            # walk every facet combination (?q=), each one a row in the
+            # ps_layered_filter_block cache. Core's default rules block ?q= and
+            # &q=. Non-fatal: the crontab step below must still run.
+            docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; exit(Tools::generateRobotsFile(true) ? 0 : 1);" || echo "WARNING: robots.txt generation failed"
             # scp does not preserve the exec bit, and the 03:45/03:47 crons
             # call these scripts directly.
             chmod +x /opt/adwear/prune-logs.sh /opt/adwear/prune-visitors.sh /opt/adwear/healthcheck.sh
