@@ -19,7 +19,7 @@
 # It also watches two things that break with the site still looking fine:
 #   - disk usage. On 2026-11-04 crawlers filled the disk through the facet cache
 #     and binlogs, MySQL stopped committing and the whole shop 500'd for 13h.
-#   - the Malfini syncs, via the logs/.ok-sync-* markers the crontab touches on
+#   - the Malfini and Anda syncs, via the logs/.ok-sync-* markers the crontab touches on
 #     success. A container compiled while MySQL restarted on 2026-10-24 lost the
 #     module's commands and the syncs failed for 10 days with the site at 200.
 #
@@ -96,9 +96,9 @@ check_sync() {
   [ -e "$marker" ] || touch "$marker"
   age=$(($(date +%s) - $(stat -c %Y "$marker")))
   if [ "$age" -gt "$max_age" ]; then
-    track "sync-$name" fail "malfini sync-$name has not succeeded for $((age / 3600))h"
+    track "sync-$name" fail "sync-$name has not succeeded for $((age / 3600))h"
   else
-    track "sync-$name" ok "malfini sync-$name succeeded"
+    track "sync-$name" ok "sync-$name succeeded"
   fi
 }
 
@@ -144,6 +144,8 @@ check_disk
 check_sync stock "$STOCK_MAX_AGE"
 check_sync products "$DAILY_MAX_AGE"
 check_sync prices "$DAILY_MAX_AGE"
+check_sync anda-stock "$STOCK_MAX_AGE"
+check_sync anda-products "$DAILY_MAX_AGE"
 
 ADMIN_DIR=$(admin_dir)
 if [ -z "$ADMIN_DIR" ]; then

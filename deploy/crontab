@@ -30,6 +30,13 @@
 0 4 * * * cd /opt/adwear && flock -n /tmp/malfini-products.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-products >> logs/cron-products.log 2>&1 && touch logs/.ok-sync-products
 0 5 * * * cd /opt/adwear && flock -n /tmp/malfini-prices.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-prices >> logs/cron-prices.log 2>&1 && touch logs/.ok-sync-prices
 
+# Anda syncs (adwear_anda). Each run downloads its feeds first; they answer
+# only this server's IP. sync-products also applies prices and stock, so new
+# items go live in the same run. 02:15 keeps it clear of the 03:15 backup and
+# the 04:00/05:00 Malfini runs. Stock runs hourly at :05, off Malfini's :30.
+15 2 * * * cd /opt/adwear && flock -n /tmp/anda-products.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:anda:sync-products >> logs/cron-anda-products.log 2>&1 && touch logs/.ok-sync-anda-products
+5 * * * * cd /opt/adwear && flock -n /tmp/anda-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:anda:sync-stock >> logs/cron-anda-stock.log 2>&1 && touch logs/.ok-sync-anda-stock
+
 # The logs/.ok-sync-* markers are touched only on success. healthcheck.sh alerts
 # when one goes stale, because a failing sync cron is otherwise silent: on
 # 2026-10-25 all three started failing and nothing noticed for 10 days.
@@ -39,7 +46,7 @@
 
 # Housekeeping — nothing else prunes logs. With APP_ENV=prod they stay small,
 # but cap them anyway: drop app logs older than 14 days (inside the container),
-# and truncate any malfini cron log on the host that grows past 20 MB.
+# and truncate any cron log on the host that grows past 20 MB.
 #
 # The DB log table (ps_log) needs its own prune: core ships no retention policy
 # for it at all, only the BO "Erase all logs" button, which is a TRUNCATE. And
