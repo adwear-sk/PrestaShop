@@ -52,6 +52,17 @@ FROM prestashop/base:${VERSION}
 # Production PHP tuning (opcache on, errors off, etc.)
 COPY deploy/php-prod.ini /usr/local/etc/php/conf.d/zz-adwear-prod.ini
 
+# Apache sees every request as coming from Caddy. Take the client IP from the
+# X-Forwarded-For header Caddy sets (it replaces any client-sent value), so the
+# access log and REMOTE_ADDR carry the real visitor address.
+RUN a2enmod remoteip \
+  && printf '%s\n' \
+    'RemoteIPHeader X-Forwarded-For' \
+    'RemoteIPInternalProxy 172.16.0.0/12' \
+    'LogFormat "%a %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" combined' \
+    > /etc/apache2/conf-available/remoteip.conf \
+  && a2enconf remoteip
+
 # Copy the fully built application from the build stage.
 COPY --from=build --chown=www-data:www-data /var/www/html /var/www/html
 

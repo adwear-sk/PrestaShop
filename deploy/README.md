@@ -24,7 +24,8 @@ A push-to-deploy setup for a single PrestaShop store on a Hetzner VPS.
 |------|------|
 | `Dockerfile` | Builds the production app image (CI only) |
 | `docker-compose.yml` | The VPS stack: caddy + app + mysql |
-| `Caddyfile` | Auto-HTTPS for www.adwear.sk |
+| `Caddyfile` | Auto-HTTPS for www.adwear.sk, access log, filter rate limits |
+| `caddy/Dockerfile` | Caddy + the rate_limit plugin (built on the VPS by compose) |
 | `php-prod.ini` | Production PHP/OPcache tuning |
 | `.env.prod.example` | Template for the server's secrets file |
 | `provision.sh` | One-time VPS hardening + Docker install |
@@ -72,7 +73,9 @@ In `PrestaShop`, `category-migrator`, `malfini-api` → Settings → Secrets →
 ```bash
 ssh deploy@<vps-ip>
 cd /opt/adwear
-# copy these from the repo: docker-compose.yml, Caddyfile
+# copy these from the repo: docker-compose.yml, Caddyfile, caddy/Dockerfile
+# (the deploy workflow does NOT sync them; after changing them, copy them
+# over by hand and run: docker compose build caddy && docker compose up -d --no-deps caddy)
 # then create the secrets file:
 cp .env.prod.example .env   # edit .env with real passwords
 ```

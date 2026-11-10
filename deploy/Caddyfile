@@ -1,11 +1,30 @@
 # Auto-HTTPS for www.adwear.sk. Caddy obtains + renews Let's Encrypt certs
 # automatically — no certbot, no cron, nothing to remember.
+#
+# Runs the image from caddy/Dockerfile (stock Caddy + the rate_limit handler).
+{
+	order rate_limit before basic_auth
+}
 
 www.adwear.sk {
 	encode zstd gzip
 	# The back office is hardened by renaming its folder to an unguessable
 	# name (injected at build time from the ADMIN_FOLDER CI secret), so there
 	# is no fixed /admin-dev path for bots to find. Nothing to gate here.
+
+	# The only place the real client IP is recorded (Apache gets it through
+	# X-Forwarded-For). Mounted at /opt/adwear/logs/caddy on the VPS; kept 14
+	# days for abuse analysis. Cookie and Authorization headers are redacted
+	# by Caddy itself.
+	log {
+		output file /var/log/caddy/access.log {
+			mode 0644
+			roll_size 50MiB
+			roll_keep 20
+			roll_keep_for 336h
+		}
+		format json
+	}
 
 	# Faceted filters on the Home category count across the whole catalogue.
 	# On 2026-11-10 a scraper with rotating browser user agents walked random
@@ -16,6 +35,29 @@ www.adwear.sk {
 		query q=*
 	}
 	respond @homeFilters "Filtering is not available on this page." 403
+
+	# Each filter request runs a set of catalogue-wide COUNT queries, so cap
+	# them per client IP (429 + Retry-After past the limit). A shopper clicking
+	# through filters stays well under both; a scraper walking combinations
+	# does not.
+	rate_limit {
+		zone filters_minute {
+			match {
+				query q=*
+			}
+			key {remote_host}
+			events 20
+			window 1m
+		}
+		zone filters_hour {
+			match {
+				query q=*
+			}
+			key {remote_host}
+			events 150
+			window 1h
+		}
+	}
 
 	reverse_proxy app:80 {
 		header_up X-Forwarded-Proto https

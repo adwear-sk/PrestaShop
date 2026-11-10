@@ -103,6 +103,9 @@ jobs:
             # and with SET PERSIST because it needs no MySQL restart: a restart
             # under traffic can compile a container with no modules in it.
             docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -e "SET PERSIST binlog_expire_logs_seconds = 259200"' || echo "WARNING: binlog retention not set"
+            # Abort any SELECT running over 2 minutes, so a burst of expensive
+            # faceted-filter counts cannot hold every connection for hours (2026-11-10).
+            docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -e "SET PERSIST max_execution_time = 120000"' || echo "WARNING: max_execution_time not set"
             # The mail layouts (mails/themes) are git-managed but sit in the mails
             # volume, so sync them in from the image. Must run BEFORE the cache
             # clear: cache:clear warms the prod Twig cache, which never
