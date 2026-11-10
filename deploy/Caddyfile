@@ -6,6 +6,17 @@ www.adwear.sk {
 	# The back office is hardened by renaming its folder to an unguessable
 	# name (injected at build time from the ADMIN_FOLDER CI secret), so there
 	# is no fixed /admin-dev path for bots to find. Nothing to gate here.
+
+	# Faceted filters on the Home category count across the whole catalogue.
+	# On 2026-11-10 a scraper with rotating browser user agents walked random
+	# filter combinations there (~550/h) and filled every MySQL connection.
+	# Shoppers filter inside real categories, so refuse it before PHP.
+	@homeFilters {
+		path_regexp ^/2-
+		query q=*
+	}
+	respond @homeFilters "Filtering is not available on this page." 403
+
 	reverse_proxy app:80 {
 		header_up X-Forwarded-Proto https
 	}
