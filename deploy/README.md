@@ -25,7 +25,7 @@ A push-to-deploy setup for a single PrestaShop store on a Hetzner VPS.
 | `Dockerfile` | Builds the production app image (CI only) |
 | `docker-compose.yml` | The VPS stack: caddy + app + mysql |
 | `Caddyfile` | Auto-HTTPS for www.adwear.sk, access log, filter rate limits |
-| `caddy/Dockerfile` | Caddy + the rate_limit plugin (built on the VPS by compose) |
+| `caddy/Dockerfile` | Caddy + the rate_limit plugin (built locally, loaded onto the VPS) |
 | `php-prod.ini` | Production PHP/OPcache tuning |
 | `.env.prod.example` | Template for the server's secrets file |
 | `provision.sh` | One-time VPS hardening + Docker install |
@@ -74,8 +74,13 @@ In `PrestaShop`, `category-migrator`, `malfini-api` → Settings → Secrets →
 ssh deploy@<vps-ip>
 cd /opt/adwear
 # copy these from the repo: docker-compose.yml, Caddyfile, caddy/Dockerfile
-# (the deploy workflow does NOT sync them; after changing them, copy them
-# over by hand and run: docker compose build caddy && docker compose up -d --no-deps caddy)
+# (the deploy workflow does NOT sync them; after changing them, copy them over
+# by hand — write the Caddyfile in place, it is a single-file bind mount — and
+# run: docker compose up -d --no-deps --no-build caddy)
+# The caddy image is NOT built on the VPS: compiling Caddy there fails (2 CPU /
+# 4 GB next to MySQL). Build it locally and load it over SSH:
+#   docker build -t adwear-caddy:latest deploy/caddy
+#   docker save adwear-caddy:latest | gzip | ssh deploy@<vps-ip> 'gunzip | docker load'
 # then create the secrets file:
 cp .env.prod.example .env   # edit .env with real passwords
 ```

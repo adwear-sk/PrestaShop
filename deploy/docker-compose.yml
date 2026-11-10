@@ -13,7 +13,8 @@ name: adwear
 
 services:
   caddy:
-    # Stock Caddy + the rate_limit handler, built on the VPS from ./caddy.
+    # Stock Caddy + the rate_limit handler from ./caddy. Built locally and
+    # loaded onto the VPS (see README); compiling it there runs out of memory.
     build: ./caddy
     image: adwear-caddy
     restart: unless-stopped

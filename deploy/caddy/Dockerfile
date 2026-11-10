@@ -1,5 +1,5 @@
 # Caddy with the rate_limit handler (github.com/mholt/caddy-ratelimit), which
-# the stock image lacks. Built on the VPS by docker compose (`build: ./caddy`);
+# the stock image lacks. Built locally and loaded onto the VPS (see README);
 # keep the version in step with the stock image it replaces.
 ARG CADDY_VERSION=2.11.4
 
