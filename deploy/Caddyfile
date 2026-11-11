@@ -26,6 +26,15 @@ www.adwear.sk {
 		format json
 	}
 
+	# Installer, git metadata and repo files that must never be served. The
+	# image no longer ships most of them; this covers older images and any
+	# file that slips back in. 404, so probes learn nothing.
+	@repoFiles {
+		path /install-dev /install-dev/* /install /install/* /.* /.*/* *.md /composer.json /composer.lock /Makefile /docker-compose*.yml /phpunit*.xml
+		not path /.well-known/*
+	}
+	respond @repoFiles 404
+
 	# Faceted filters on the Home category count across the whole catalogue.
 	# On 2026-11-10 a scraper with rotating browser user agents walked random
 	# filter combinations there (~550/h) and filled every MySQL connection.

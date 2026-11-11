@@ -99,6 +99,11 @@ git checkout -b production && git push -u origin production
 ```
 
 ### 9. First install (writes parameters.php + populates the DB) — run ONCE
+The prod image ships **without** `install-dev/` (removed in `deploy/Dockerfile`, and Caddy
+refuses the path). For a fresh install, copy it in from a checkout of the same commit first,
+and remove it right after:
+`docker compose cp install-dev app:/var/www/html/install-dev` … run the command below …
+`docker compose exec app rm -rf /var/www/html/install-dev`.
 ```bash
 cd /opt/adwear
 docker compose up -d mysql
