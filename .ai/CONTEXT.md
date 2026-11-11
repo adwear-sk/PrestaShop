@@ -79,6 +79,7 @@ Breaking changes are only allowed in major versions. See [ADR 0017](https://gith
 | `adwear-prod-oneoff` | [skills/adwear-prod-oneoff/SKILL.md](skills/adwear-prod-oneoff/SKILL.md) | "fix this on prod", "run this on the live shop" |
 | `adwear-ship-plan` | [skills/adwear-ship-plan/SKILL.md](skills/adwear-ship-plan/SKILL.md) | "what's queued", "push in bulk", "prepare the deploy" |
 | `adwear-module-release` | [skills/adwear-module-release/SKILL.md](skills/adwear-module-release/SKILL.md) | "bump the module version", "roll out the new module to prod" |
+| `adwear-retro` | [skills/adwear-retro/SKILL.md](skills/adwear-retro/SKILL.md) | "retro", "anything worth saving?", "what should become a skill/agent" |
 
 ## Domain contexts
 

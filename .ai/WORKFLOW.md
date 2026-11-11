@@ -91,6 +91,9 @@ Fix CONFIRMED findings; mention PLAUSIBLE ones to the user.
 
 End every change with: what changed, what was verified, and what is **committed but unpushed** per repo
 (the `ship-planner` agent / `adwear-ship-plan` skill produces this across all repos).
+Close with one line — **Reusable:** `none`, or a one-line proposal (new/extended skill, agent or memory note) when
+this change repeated a procedure, needed a non-obvious fix, or got a user correction. Propose only; deeper
+reviews go through [`adwear-retro`](skills/adwear-retro/SKILL.md).
 
 ### 8. Ship (only on explicit request)
 
@@ -123,6 +126,7 @@ End every change with: what changed, what was verified, and what is **committed 
 | [`adwear-prod-oneoff`](skills/adwear-prod-oneoff/SKILL.md) | One-time prod data fixes via scratchpad script + paste-ready command |
 | [`adwear-ship-plan`](skills/adwear-ship-plan/SKILL.md) | Survey unpushed commits, ordered bulk-push plan |
 | [`adwear-module-release`](skills/adwear-module-release/SKILL.md) | Version bump, upgrade script, new-module prod rollout |
+| [`adwear-retro`](skills/adwear-retro/SKILL.md) | Session retro: what's worth saving as a skill, agent or memory note (proposals only) |
 | [`scaffold-adwear-repo`](skills/scaffold-adwear-repo/SKILL.md) | New module/theme repo |
 
 **When to delegate:** the `analyzer` always runs as an agent (keeps the exploration out of the main context). Otherwise spawn agents for self-contained work with a small result (verification, review,
