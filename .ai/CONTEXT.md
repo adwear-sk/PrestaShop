@@ -3,7 +3,7 @@
 > For folder structure and navigation, see [STRUCTURE.md](STRUCTURE.md).
 > For cross-domain naming traps and identity gotchas, see [GOTCHAS.md](GOTCHAS.md).
 > For multi-store scoping (ShopConstraint, AbstractMultistoreConfiguration), see [MULTISTORE.md](MULTISTORE.md).
-> **Adwear fork:** every change follows [WORKFLOW.md](WORKFLOW.md) (classify → implement → verify → review → commit locally → report).
+> **Adwear fork:** every change follows [WORKFLOW.md](WORKFLOW.md) (analyze → choose → plan, then per step: implement → verify → review → commit locally → report).
 
 ## Project overview
 
@@ -72,6 +72,8 @@ Breaking changes are only allowed in major versions. See [ADR 0017](https://gith
 | `component-context-generator` | [skills/component-context-generator/SKILL.md](skills/component-context-generator/SKILL.md) | "generate context for [Component]" |
 | `create-pr` | [skills/create-pr/SKILL.md](skills/create-pr/SKILL.md) | "create a PR", "open a pull request", "submit a PR" |
 | `scaffold-adwear-repo` | [skills/scaffold-adwear-repo/SKILL.md](skills/scaffold-adwear-repo/SKILL.md) | "create a new module/theme", "scaffold an adwear repo like malfini_api" |
+| `adwear-analyze` | [skills/adwear-analyze/SKILL.md](skills/adwear-analyze/SKILL.md) | any new request/idea, "analyze", "what are the options" |
+| `adwear-task-board` | [skills/adwear-task-board/SKILL.md](skills/adwear-task-board/SKILL.md) | "the board", "next step", "what's blocked", "open questions" |
 | `adwear-verify-storefront` | [skills/adwear-verify-storefront/SKILL.md](skills/adwear-verify-storefront/SKILL.md) | "verify the page", "screenshots", "check on mobile", "does it overflow" |
 | `adwear-deploy-sql` | [skills/adwear-deploy-sql/SKILL.md](skills/adwear-deploy-sql/SKILL.md) | "add a migration", "ship this DB/config change to prod" |
 | `adwear-prod-oneoff` | [skills/adwear-prod-oneoff/SKILL.md](skills/adwear-prod-oneoff/SKILL.md) | "fix this on prod", "run this on the live shop" |

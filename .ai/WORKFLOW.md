@@ -1,9 +1,35 @@
 # Adwear — Definitive Change Workflow
 
 > Applies to every change in this Adwear fork (theme, custom modules, overrides, deploy/sql, prod ops).
+> Start at §0 — nothing is implemented before a path is chosen.
 > Core PrestaShop conventions still live in [CONTEXT.md](CONTEXT.md); this file says *how work flows*.
 
-## The loop
+## 0. Intake → Analyze → Choose → Plan (always first)
+
+```
+request (= idea) → analyzer: goal check + every usable path → board + chat → STOP
+   → user chooses path + stopping points → steps on the board → per step: the loop below → stop at checkpoints
+```
+
+- A new request is an **idea to explore**, never an instruction to build what was named — even in auto mode.
+- Run the `analyzer` agent (skill `adwear-analyze`) first: does the goal make sense (`sound` / `reframe` / `doubtful`),
+  then **all** usable alternatives — no fixed count — including ones different from the user's idea, plus
+  rejected ones with reasons. Write the result to the task board, then **stop and wait** for the user's choice.
+- Presenting: ≤ 5 usable paths → all in chat with strengths/weaknesses; > 5 → goal check, top 3, counts and the
+  board link (full list lives on the board).
+- After the choice: ask for stopping points if not given, write the steps (with checkpoints) to the board.
+  Then each step runs through the loop below; stop at every checkpoint and report.
+- **No work on a task while it has an open blocking question.** New questions go on the board immediately.
+- **Bypass only** when the user explicitly says so ("just do it", "skip analysis"), or for "next step" on an
+  approved tasklist. Plain questions get a direct answer; investigations report findings.
+
+### Task board
+
+The true goal, analyses, chosen paths, steps and questions live in the **Launch Readiness** artifact:
+https://claude.ai/artifact/KsMrS3dk7cnLtxZYYMweEt — schema and operations in
+[`adwear-task-board`](skills/adwear-task-board/SKILL.md). Check its true goal before recommending a direction.
+
+## The loop (per step)
 
 ```
 1 Classify → 2 Locate repo → 3 Implement → 4 Verify → 5 Review → 6 Commit locally → 7 Report queue
@@ -80,6 +106,7 @@ End every change with: what changed, what was verified, and what is **committed 
 
 | Agent | Role | Writes code? |
 |-------|------|--------------|
+| `analyzer` | Runs first: goal check + every usable path, returns board JSON | no |
 | `theme-dev` | Implements storefront changes in `themes/adwear` | yes |
 | `module-dev` | Implements custom modules and core overrides | yes |
 | `ui-verifier` | Screenshots + overflow checks, reports | no |
@@ -89,6 +116,8 @@ End every change with: what changed, what was verified, and what is **committed 
 
 | Skill | Use for |
 |-------|---------|
+| [`adwear-analyze`](skills/adwear-analyze/SKILL.md) | Goal check + exhaustive path analysis before any work |
+| [`adwear-task-board`](skills/adwear-task-board/SKILL.md) | Board pointer + schema; write analyses/steps/questions, follow steps |
 | [`adwear-verify-storefront`](skills/adwear-verify-storefront/SKILL.md) | Playwright screenshots / overflow check of local or prod pages |
 | [`adwear-deploy-sql`](skills/adwear-deploy-sql/SKILL.md) | Writing + idempotency-testing a `deploy/sql` migration |
 | [`adwear-prod-oneoff`](skills/adwear-prod-oneoff/SKILL.md) | One-time prod data fixes via scratchpad script + paste-ready command |
@@ -96,5 +125,5 @@ End every change with: what changed, what was verified, and what is **committed 
 | [`adwear-module-release`](skills/adwear-module-release/SKILL.md) | Version bump, upgrade script, new-module prod rollout |
 | [`scaffold-adwear-repo`](skills/scaffold-adwear-repo/SKILL.md) | New module/theme repo |
 
-**When to delegate:** spawn agents for self-contained work with a small result (verification, review,
+**When to delegate:** the `analyzer` always runs as an agent (keeps the exploration out of the main context). Otherwise spawn agents for self-contained work with a small result (verification, review,
 ship survey, prod diagnosis) or for parallel independent changes in separate worktrees. Small edits stay inline.
