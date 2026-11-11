@@ -3,7 +3,9 @@
 # Multi-stage: the "build" stage runs composer + the asset build (needs Node);
 # the final stage ships only the runnable result (no Node, no dev deps).
 
-ARG VERSION="8.1-apache"
+# PHP 8.4: security fixes until 2028-12-31 (8.1 lost them at the end of 2025).
+# 8.5 is out of reach while phpoffice/phpspreadsheet pins php <8.5.
+ARG VERSION="8.4-apache"
 
 # ---------------------------------------------------------------------------
 # Stage 1 — build: composer install --no-dev + ./tools/assets/build.sh all
@@ -62,6 +64,27 @@ RUN a2enmod remoteip \
     'LogFormat "%a %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" combined' \
     > /etc/apache2/conf-available/remoteip.conf \
   && a2enconf remoteip
+
+# Cap Apache at 24 mod_php workers. The default 150 met MySQL's 151 connection
+# limit, so a flood used up every DB connection (peak 152 on 2026-11-10) and each
+# worker can take memory_limit 512M on a 3.7 GB box. Extra requests now queue
+# in the listen backlog instead. 24 is provisional until perf-load-test sets it.
+# Recycling workers every 1000 requests bounds slow leaks. ServerTokens and
+# ServerSignature stop the Apache and Debian versions leaking in headers and error pages.
+RUN printf '%s\n' \
+    '<IfModule mpm_prefork_module>' \
+    '    StartServers            4' \
+    '    MinSpareServers         4' \
+    '    MaxSpareServers         8' \
+    '    ServerLimit             24' \
+    '    MaxRequestWorkers       24' \
+    '    MaxConnectionsPerChild  1000' \
+    '</IfModule>' \
+    > /etc/apache2/mods-available/mpm_prefork.conf \
+  && sed -i -e 's/^ServerTokens .*/ServerTokens Prod/' -e 's/^ServerSignature .*/ServerSignature Off/' \
+    /etc/apache2/conf-available/security.conf \
+  && grep -q '^ServerTokens Prod' /etc/apache2/conf-available/security.conf \
+  && grep -q '^ServerSignature Off' /etc/apache2/conf-available/security.conf
 
 # Copy the fully built application from the build stage.
 COPY --from=build --chown=www-data:www-data /var/www/html /var/www/html
