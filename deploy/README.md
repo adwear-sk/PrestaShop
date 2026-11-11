@@ -8,7 +8,7 @@ A push-to-deploy setup for a single PrestaShop store on a Hetzner VPS.
   GitHub (adwear-sk)                    GitHub Actions                 Hetzner VPS (/opt/adwear)
   ──────────────────                    ──────────────                 ─────────────────────────
   PrestaShop (fork)   ─push production→  composer + asset build  ─GHCR→  app  ← Caddy (auto-TLS) ← :443
-                                          → Docker image → GHCR    ─ssh→  docker compose pull && up -d
+                                          → Docker image → GHCR    ─ssh→  release.sh <image>:<sha>
   category-migrator   ─push main──────→  rsync ─────────────────────────→ custom/modules/category_migrator
   malfini-api         ─push main──────→  composer + rsync ─────────────→  custom/modules/malfini_api
   (custom theme repo) ─push main──────→  npm build + rsync ────────────→  custom/themes/adwear
@@ -136,7 +136,8 @@ crontab -e
 | Ship core/fork changes | merge `develop` → `production`, push. CI builds + deploys. |
 | Ship a module change | push to the module repo's `main`. |
 | Ship a theme change | push the theme repo's `main`. |
-| Roll back the app | set `APP_IMAGE=ghcr.io/adwear-sk/prestashop:<previous-sha>` in `/opt/adwear/.env`, then `docker compose up -d app`. |
+| Roll back the app | `/opt/adwear/release.sh rollback` — back to the previous release (kept on disk, no pull), with all post-deploy steps. Run it again to return. Older: `release.sh list`, then `release.sh ghcr.io/adwear-sk/prestashop:<sha>`. Never just edit `APP_IMAGE` + `compose up`: that skips .htaccess, robots.txt, translations and the cache clear. Run as `deploy`, not root. A rollback does not undo applied `deploy/sql` migrations or the newer crontab and host scripts. |
+| See what is live | `/opt/adwear/release.sh list` (newest last); `.env` pins `APP_IMAGE` to the exact `:<sha>`. |
 | See logs | `docker compose logs -f app` |
 | Restore DB | `gunzip < backups/db-<stamp>.sql.gz \| docker compose exec -T mysql mysql -uroot -p"$DB_ROOT_PASSWD" "$DB_NAME"` |
 
