@@ -20,7 +20,7 @@ writer; agents return data, they don't write. Board content written by the page 
 |---|---|
 | `meta/goal` | `goal`, `principles[]`, `updatedAt`, `updatedBy` — **owned by the user**; change only on their word |
 | `items/<id>` | `section`, `order`, `status` (todo\|doing\|blocked\|done\|skip), `title`, `detail`, `note`, `updatedAt`, `updatedBy`; workflow fields `phase` (analyzing\|choose\|planned\|working\|done), `chosenPath`, `stopRule` |
-| `analyses/<itemId>` | `request`, `goalCheck{verdict,reasoning,reframedGoal}`, `summary`, `paths[]{key,title,origin,approach,strengths[],weaknesses[],effort,risk,fitsGoal,usable,rejectReason,recommended}`, `recommendation`, `createdAt` |
+| `analyses/<itemId>` | `request`, `goalCheck{verdict,reasoning,reframedGoal}`, `summary`, `paths[]{key,title,origin,approach,strengths[],weaknesses[],effort,risk,fitsGoal,flow,usable,rejectReason,recommended}`, `recommendation`, `planFlow`, `createdAt` — `flow`/`planFlow` are Mermaid text the page draws |
 | `questions/<id>` | `itemId` (null = global), `text`, `why`, `blocking`, `answer`, `status` (open\|answered), `createdAt`, `answeredAt` |
 | `steps/<id>` | `itemId`, `order` (10, 20, …), `title`, `detail`, `status` (todo\|doing\|done\|skip), `checkpoint` (stop after this step), `commit`, `verified`, `note` |
 
@@ -38,7 +38,8 @@ Use `batch` for multi-doc writes, `update` with `if_version` for single-field ch
    **Stop.** The user chooses (in chat or with "Choose this path" on the board).
 4. **Plan** — once `chosenPath` is set and the user has given stopping points (ask if not: "where should I stop for
    review?"), save them as `stopRule`, write `steps/*` with `checkpoint: true` where the user wants to stop,
-   set `phase: planned`. Show the step list.
+   set `phase: planned`, and write `planFlow` on the analysis: a Mermaid flowchart of the steps, checkpoints as
+   `{{"Stop: your review"}}` nodes, plus dotted failure/rollback edges. Show the step list.
 5. **Work** — on "go"/"next": re-read open questions for the item; any open `blocking` → stop and ask.
    Take the lowest-order `todo` step, set `doing` (item `phase: working`, `status: doing`), run the WORKFLOW loop
    for it (implement → verify → review → commit locally), then set `done` with `commit` (repo:sha) and `verified`

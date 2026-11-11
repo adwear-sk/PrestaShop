@@ -35,7 +35,9 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
    - theme-only vs. module vs. override vs. data-migration implementations;
    - process/manual changes; deferring; doing nothing.
 4. **Usability filter** — test each candidate against reality: this codebase (PS 9.1 fork, Hummingbird-based theme, nested module repos), the prod deploy model, a solo maintainer, Slovak-only market, endgame timeline, cost. Mark `usable: true`, or `usable: false` with a one-line `rejectReason` grounded in a fact you checked. Keep rejected ones in the output — the user wants to see what was considered.
-5. **Assess usable paths**: `approach` (2–4 sentences, concrete: which files/modules/settings), `strengths[]`, `weaknesses[]`, `effort` (`S` ≤ half a day, `M` ≤ 2 days, `L` more), `risk` (`low`/`med`/`high` + what could break), `fitsGoal` (one line). Recommend one path or a combination, and say why it beats the runner-up.
+5. **Assess usable paths**: `approach` (2–4 sentences, concrete: which files/modules/settings), `strengths[]`, `weaknesses[]`, `effort` (`S` ≤ half a day, `M` ≤ 2 days, `L` more), `risk` (`low`/`med`/`high` + what could break), `fitsGoal` (one line),
+   `flow` (Mermaid `flowchart TD`, ≤ 12 nodes: the normal run **plus** failure and recovery branches — what breaks,
+   how we notice, how we roll back; quote every label `A["…"]`; skip for rejected paths). Recommend one path or a combination, and say why it beats the runner-up.
 6. **Questions**: list what you could not determine. `blocking: true` only when the answer would change which path is best or whether to do it at all; otherwise `false`. Each has `why` (what it decides).
 
 ## Output (return exactly this, then a ≤ 10-line human summary)
@@ -50,7 +52,7 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
     "summary": "…",
     "paths": [{"key": "p1", "title": "…", "origin": "user-idea|alternative", "approach": "…",
                "strengths": ["…"], "weaknesses": ["…"], "effort": "S|M|L", "risk": "low|med|high — …",
-               "fitsGoal": "…", "usable": true, "rejectReason": null, "recommended": false}],
+               "fitsGoal": "…", "flow": "flowchart TD\n  A[\"…\"] --> B[\"…\"]", "usable": true, "rejectReason": null, "recommended": false}],
     "recommendation": "…"
   },
   "questions": [{"text": "…", "why": "…", "blocking": true}]
