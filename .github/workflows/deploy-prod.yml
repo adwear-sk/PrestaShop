@@ -42,12 +42,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Record which prestashop/base digest this image is built on; the weekly
+      # base-image-check.yml compares it with the newest one to spot pending patches.
+      - name: Resolve base image digest
+        id: base
+        run: |
+          version=$(sed -n 's/^ARG VERSION="\(.*\)"/\1/p' deploy/Dockerfile)
+          digest=$(docker buildx imagetools inspect "prestashop/base:$version" --format '{{json .Manifest.Digest}}' | tr -d '"' || true)
+          # Non-fatal: a deploy must not fail on a Docker Hub hiccup; the weekly check then alerts once.
+          [ -n "$digest" ] || echo "::warning::could not resolve prestashop/base:$version; image gets no base-digest label"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
       - name: Build & push image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: deploy/Dockerfile
+          # Always build on the newest base image, so a deploy also ships its PHP/OS patches.
+          pull: true
           push: true
+          labels: |
+            org.adwear.base-digest=${{ steps.base.outputs.digest }}
           build-args: |
             ADMIN_FOLDER=${{ secrets.ADMIN_FOLDER }}
           tags: |

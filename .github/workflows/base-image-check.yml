@@ -1,0 +1,123 @@
+# Weekly check for PHP / Debian / Apache patches in the prod image's base.
+# The prod image only picks up base-image fixes when it is rebuilt, and it is only
+# rebuilt on a push to `production`. This job compares the digest of
+# prestashop/base:<VERSION> now with the one the last deployed image was built from
+# (label org.adwear.base-digest on :latest, set by deploy-prod.yml). When they differ
+# it test-builds the image on the new base and sends an alert. It never deploys:
+# ship by running "Deploy to production" (Run workflow on `production`).
+#
+# Limits:
+# - Scheduled runs only fire from the repo's default branch, so this file must be on
+#   that branch (or the default branch switched to `production`). An upstream sync
+#   that resets `develop` deletes it and the schedule stops silently. GitHub also
+#   disables schedules in public repos after 60 days without repo activity.
+# - It compares with :latest, the last image CI built. After `release.sh rollback`
+#   prod runs an older image that this check does not see.
+#
+# Optional repo secret ALERT_URL: the same plain-POST URL as healthcheck.sh (an ntfy
+# topic works). Without it the run fails when an update is pending, and GitHub's
+# failed-run e-mail is the alert.
+name: Base image check
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/prestashop
+
+defaults:
+  run:
+    shell: bash   # -eo pipefail: a failed lookup inside $(…) fails the step
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: production
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compare base image digests
+        id: digest
+        run: |
+          version=$(sed -n 's/^ARG VERSION="\(.*\)"/\1/p' deploy/Dockerfile)
+          [ -n "$version" ] || { echo "::error::no ARG VERSION=\"…\" in deploy/Dockerfile"; exit 1; }
+          base="prestashop/base:$version"
+          new=$(docker buildx imagetools inspect "$base" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          [ -n "$new" ] || { echo "::error::could not resolve $base"; exit 1; }
+          live=$(docker buildx imagetools inspect "$IMAGE:latest" --format '{{json .Image}}' \
+            | jq -r '[.. | objects | .Labels? // empty | .["org.adwear.base-digest"]? // empty] | first // empty')
+          {
+            echo "base=$base"
+            echo "new=$new"
+            echo "live=$live"
+            if [ "$new" = "$live" ]; then echo "changed=false"; else echo "changed=true"; fi
+          } >> "$GITHUB_OUTPUT"
+          echo "$base: live ${live:-no label}, now $new" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test-build the image on the new base
+        if: steps.digest.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          pull: true
+          push: false
+          load: true
+          tags: adwear-candidate:check
+
+      - name: Smoke-test the candidate
+        if: steps.digest.outputs.changed == 'true'
+        id: smoke
+        run: |
+          docker run --rm adwear-candidate:check sh -c '
+            set -e
+            php -r "foreach ([\"pdo_mysql\",\"intl\",\"gd\",\"zip\",\"soap\",\"mbstring\",\"curl\",\"Zend OPcache\"] as \$e) { if (!extension_loaded(\$e)) { fwrite(STDERR, \"missing \$e\n\"); exit(1); } }"
+            apache2ctl -t
+            grep -q "MaxRequestWorkers *24" /etc/apache2/mods-enabled/mpm_prefork.conf
+            php -r "echo PHP_VERSION;"' > php-version.txt
+          echo "php=$(cat php-version.txt)" >> "$GITHUB_OUTPUT"
+          echo "Candidate builds, PHP $(cat php-version.txt), apache2ctl -t OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Alert
+        if: steps.digest.outputs.changed == 'true'
+        env:
+          ALERT_URL: ${{ secrets.ALERT_URL }}
+          LIVE: ${{ steps.digest.outputs.live }}
+        run: |
+          if [ -z "$LIVE" ]; then
+            msg="adwear: the live image has no base-digest label yet (deployed before the label existed). Test build on ${{ steps.digest.outputs.base }} OK (PHP ${{ steps.smoke.outputs.php }}). The next production deploy adds the label and stops this alert."
+          else
+            msg="adwear: base image update for ${{ steps.digest.outputs.base }} (PHP ${{ steps.smoke.outputs.php }}). Test build OK. Ship it: Actions > Deploy to production > Run workflow on production."
+          fi
+          if [ -n "$ALERT_URL" ]; then
+            curl -fsS -o /dev/null --max-time 10 -d "$msg" "$ALERT_URL" || { echo "::error::alert delivery failed: $msg"; exit 1; }
+          else
+            echo "::error::$msg"
+            exit 1
+          fi
+
+      # A base update that breaks the build matters most: tell ALERT_URL too, not only e-mail.
+      - name: Alert on a broken build
+        if: failure() && steps.digest.outputs.changed == 'true'
+        env:
+          ALERT_URL: ${{ secrets.ALERT_URL }}
+        run: |
+          [ -n "$ALERT_URL" ] || exit 0
+          curl -fsS -o /dev/null --max-time 10 -d "adwear: ${{ steps.digest.outputs.base }} changed and the prod image no longer builds or fails its smoke test. Do not deploy; see the Base image check run." "$ALERT_URL"
