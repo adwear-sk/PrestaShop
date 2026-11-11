@@ -19,10 +19,10 @@ writer; agents return data, they don't write. Board content written by the page 
 | Collection / doc | Fields |
 |---|---|
 | `meta/goal` | `goal`, `principles[]`, `updatedAt`, `updatedBy` — **owned by the user**; change only on their word |
-| `items/<id>` | `section`, `order`, `status` (todo\|doing\|blocked\|done\|skip), `title`, `detail`, `note`, `updatedAt`, `updatedBy`; workflow fields `phase` (analyzing\|choose\|planned\|working\|done), `chosenPath`, `stopRule` |
+| `items/<id>` | `section`, `order`, `status` (todo\|doing\|blocked\|done\|skip), `title`, `detail`, `note`, `updatedAt`, `updatedBy`; workflow fields `phase` (analyzing\|choose\|planned\|working\|done), `chosenPath`, `stopRule`; queue fields `queue` (now\|next\|later\|null), `queueOrder` (10, 20, …) |
 | `analyses/<itemId>` | `request`, `goalCheck{verdict,reasoning,reframedGoal}`, `summary`, `paths[]{key,title,origin,approach,strengths[],weaknesses[],effort,risk,fitsGoal,flow,usable,rejectReason,recommended}`, `recommendation`, `planFlow`, `createdAt` — `flow`/`planFlow` are Mermaid text the page draws |
 | `questions/<id>` | `itemId` (null = global), `text`, `why`, `blocking`, `answer`, `status` (open\|answered), `createdAt`, `answeredAt` |
-| `steps/<id>` | `itemId`, `order` (10, 20, …), `title`, `detail`, `status` (todo\|doing\|done\|skip), `checkpoint` (stop after this step), `commit`, `verified`, `note` |
+| `steps/<id>` | `itemId`, `order` (10, 20, …), `title`, `detail`, `status` (todo\|doing\|done\|skip), `checkpoint` (stop after this step), `commit` (`repo:sha` — the part before `:` groups the Unpushed lane), `pushed` (true once shipped), `verified`, `note` |
 
 Item ids are kebab-case with a section prefix (`checkout-packeta-test`). Question/step ids: `<itemId>-q1`, `<itemId>-s10`.
 Use `batch` for multi-doc writes, `update` with `if_version` for single-field changes; timestamps ISO.
@@ -46,6 +46,15 @@ Use `batch` for multi-doc writes, `update` with `if_version` for single-field ch
    (what was actually checked). Continue to the next step unless this one is a `checkpoint` → report and stop.
 6. **Finish** — all steps done/skip → item `status: done`, `phase: done`, a short `note` with the outcome and what's
    queued for the next push.
+
+### Queue (Now / Next / Later)
+
+The page's Queue view shows lanes Now (WIP limit 3), Next, Later and Unpushed. Keep it current:
+- Path chosen → `queue: next` (append: `queueOrder` = max in lane + 10) unless the user placed it already.
+- Work starts → `queue: now`. If Now already holds 3, say so and ask which one to move before starting.
+- Item finished → `queue: null`.
+- After a push the user confirms (`adwear-ship-plan`), set `pushed: true` on every step whose commit shipped.
+- The user's own lane/order changes on the page win; never reshuffle them.
 
 New questions that come up mid-work go on the board immediately (blocking ones stop the step).
 Answers given in chat get written back to the question doc (`answer`, `status: answered`, `answeredAt`).
