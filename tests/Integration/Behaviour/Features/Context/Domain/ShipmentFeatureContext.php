@@ -1,5 +1,4 @@
 <?php
-
 /**
  * For the full copyright and license information, please view the
  * docs/licenses/LICENSE.txt file that was distributed with this source code.
@@ -14,20 +13,58 @@ use Exception;
 use Order;
 use OrderDetail;
 use PHPUnit\Framework\Assert;
+use PrestaShop\PrestaShop\Core\Domain\Carrier\Exception\CarrierNotFoundException;
+use PrestaShop\PrestaShop\Core\Domain\Order\Exception\CannotFindProductInOrderException;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Command\CreateShipment;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Command\DeleteProductFromShipment;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Command\EditShipment;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Command\FulfillShipmentCommand;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Command\MergeProductsToShipment;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Command\SplitShipment;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Command\SwitchShipmentCarrierCommand;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Exception\InvalidShipmentTrackingNumberException;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Exception\ShipmentNotFoundException;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Query\GetOrderShipments;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Query\GetShipmentForEditing;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Query\GetShipmentForViewing;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Query\GetShipmentProducts;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Query\GetShipmentsForOrderDetail;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\Query\ListAvailableShipments;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\Query\ListAvailableShipmentsForProduct;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\QueryResult\ShipmentForEditing;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\QueryResult\ShipmentForOrderDetail;
 use PrestaShop\PrestaShop\Core\Domain\Shipment\QueryResult\ShipmentForViewing;
+use PrestaShop\PrestaShop\Core\Domain\Shipment\QueryResult\ShipmentsForProduct;
+use PrestaShopBundle\Entity\Repository\ShipmentRepository;
 use RuntimeException;
 use Tests\Integration\Behaviour\Features\Context\SharedStorage;
 
 class ShipmentFeatureContext extends AbstractDomainFeatureContext
 {
+    /**
+     * @When I create a shipment for order :orderReference with carrier :carrierReference and product :productName with quantity :quantity
+     */
+    public function createShipment(string $orderReference, string $carrierReference, string $productName, int $quantity): void
+    {
+        $orderId = $this->referenceToId($orderReference);
+        $carrierId = $this->referenceToId($carrierReference);
+
+        $productId = 0;
+        $order = new Order($orderId);
+        foreach ($order->getOrderDetailList() as $orderDetail) {
+            if ($orderDetail['product_name'] === $productName) {
+                $productId = (int) $orderDetail['product_id'];
+                break;
+            }
+        }
+
+        $shipmentId = $this->getCommandBus()->handle(
+            new CreateShipment($orderId, $carrierId, $productId, $quantity)
+        );
+
+        SharedStorage::getStorage()->set('new_shipment', $shipmentId);
+    }
+
     /**
      * @When I switch the carrier for shipment :shipmentReference to :carrierReference
      */
@@ -59,6 +96,8 @@ class ShipmentFeatureContext extends AbstractDomainFeatureContext
             new GetOrderShipments($orderId)
         );
 
+        usort($shipments, fn ($a, $b) => $a->getId() <=> $b->getId());
+
         if (count($shipments) === 0) {
             $msg = 'Order [' . $orderId . '] has no shipments';
             throw new RuntimeException($msg);
@@ -75,11 +114,11 @@ class ShipmentFeatureContext extends AbstractDomainFeatureContext
                 throw new RuntimeException('Shipment [' . $shipment->getId() . '] does not belong to order [' . $orderId . ']');
             }
 
-            Assert::assertEquals($shipment->getTrackingNumber(), $shipmentData['tracking_number']);
-            Assert::assertEquals($shipment->getCarrierSummary()->getId(), $carrierId, 'Wrong carrier ID for ' . $carrierReference);
-            Assert::assertEquals($shipment->getAddressId(), $addressId);
-            Assert::assertEquals($shipment->getShippingCostTaxExcluded(), $shipmentData['shipping_cost_tax_excl'], 'Wrong shipping cast tax excluded for ' . $carrierReference);
-            Assert::assertEquals($shipment->getShippingCostTaxIncluded(), $shipmentData['shipping_cost_tax_incl'], 'Wrong shipping cast tax included for ' . $carrierReference);
+            Assert::assertEquals($shipmentData['tracking_number'], $shipment->getTrackingNumber(), 'Tracking number mismatch');
+            Assert::assertEquals($carrierId, $shipment->getCarrierSummary()->getId(), 'Wrong carrier ID for ' . $carrierReference);
+            Assert::assertEquals($addressId, $shipment->getAddressId(), 'Address ID mismatch');
+            Assert::assertEqualsWithDelta((float) $shipmentData['shipping_cost_tax_excl'], (float) (string) $shipment->getShippingCostTaxExcluded(), 0.001, 'Wrong shipping cost tax excluded for ' . $carrierReference);
+            Assert::assertEqualsWithDelta((float) $shipmentData['shipping_cost_tax_incl'], (float) (string) $shipment->getShippingCostTaxIncluded(), 0.001, 'Wrong shipping cost tax included for ' . $carrierReference);
             SharedStorage::getStorage()->set($shipmentData['shipment'], $shipment->getId());
         }
     }
@@ -106,6 +145,142 @@ class ShipmentFeatureContext extends AbstractDomainFeatureContext
     }
 
     /**
+     * @Then the shipment :shipmentReference of order :orderReference should be editable with the following products:
+     *
+     * @param string $shipmentReference
+     * @param string $orderReference
+     * @param TableNode $table
+     */
+    public function assertShipmentForEditing(string $shipmentReference, string $orderReference, TableNode $table): void
+    {
+        /** @var ShipmentForEditing $shipment */
+        $shipment = $this->getQueryBus()->handle(
+            new GetShipmentForEditing($this->referenceToId($orderReference), $this->referenceToId($shipmentReference))
+        );
+
+        $selectedQuantities = $shipment->getProductsIds();
+
+        $expectedQuantities = [];
+        foreach ($table->getColumnsHash() as $row) {
+            $expectedQuantities[$this->referenceToId($row['product'])] = (int) $row['quantity'];
+        }
+
+        ksort($expectedQuantities);
+        ksort($selectedQuantities);
+
+        Assert::assertSame(
+            $expectedQuantities,
+            $selectedQuantities,
+            sprintf('Wrong selected products reported by the edit view of shipment "%s"', $shipmentReference)
+        );
+    }
+
+    /**
+     * @When I try to switch the carrier for shipment :shipmentReference to a carrier that does not exist
+     */
+    public function switchShipmentCarrierToUnknownCarrier(string $shipmentReference): void
+    {
+        try {
+            $this->getCommandBus()->handle(
+                new SwitchShipmentCarrierCommand($this->referenceToId($shipmentReference), 999999)
+            );
+        } catch (Exception $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @When I try to edit the shipment :shipmentReference with a carrier that does not exist
+     */
+    public function editShipmentWithUnknownCarrier(string $shipmentReference): void
+    {
+        try {
+            $this->getCommandBus()->handle(
+                new EditShipment($this->referenceToId($shipmentReference), 999999)
+            );
+        } catch (Exception $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @Then I should get an error that the carrier was not found
+     */
+    public function assertCarrierNotFoundException(): void
+    {
+        $this->assertLastErrorIs(CarrierNotFoundException::class);
+    }
+
+    /**
+     * @Then the available shipments of order :orderReference for product :productReference should be:
+     *
+     * @param string $orderReference
+     * @param string $productReference
+     * @param TableNode $table
+     */
+    public function assertAvailableShipmentsForProduct(
+        string $orderReference,
+        string $productReference,
+        TableNode $table
+    ): void {
+        $expected = [];
+        foreach ($table->getColumnsHash() as $row) {
+            $shipmentId = $this->referenceToId($row['shipment']);
+            $expected[] = [
+                'id' => $shipmentId,
+                // the shipment id is assigned by the database, so the expected name carries a
+                // placeholder rather than a literal that would only hold for one fixture state
+                'name' => str_replace('{shipmentId}', (string) $shipmentId, $row['name']),
+            ];
+        }
+
+        $actual = array_map(
+            static fn (ShipmentsForProduct $shipment) => [
+                'id' => $shipment->getId(),
+                'name' => $shipment->getName(),
+            ],
+            $this->getAvailableShipmentsForProduct($orderReference, $productReference)
+        );
+
+        Assert::assertSame(
+            $expected,
+            $actual,
+            sprintf('Wrong available shipments listed for product "%s" of order "%s"', $productReference, $orderReference)
+        );
+    }
+
+    /**
+     * @When I try to list the available shipments of order :orderReference for product :productReference
+     */
+    public function tryToListAvailableShipmentsForProduct(string $orderReference, string $productReference): void
+    {
+        try {
+            $this->getAvailableShipmentsForProduct($orderReference, $productReference);
+        } catch (Exception $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @return ShipmentsForProduct[]
+     */
+    private function getAvailableShipmentsForProduct(string $orderReference, string $productReference): array
+    {
+        return $this->getQueryBus()->handle(new ListAvailableShipmentsForProduct(
+            $this->referenceToId($orderReference),
+            $this->referenceToId($productReference)
+        ));
+    }
+
+    /**
+     * @Then I should get an error that the product was not found in the order
+     */
+    public function assertCannotFindProductInOrderException(): void
+    {
+        $this->assertLastErrorIs(CannotFindProductInOrderException::class);
+    }
+
+    /**
      * @Then the shipment :shipmentReference should be deleted
      *
      * @param string $shipmentReference
@@ -114,10 +289,13 @@ class ShipmentFeatureContext extends AbstractDomainFeatureContext
     {
         $shipmentId = SharedStorage::getStorage()->get($shipmentReference);
 
+        $getShipmentDeleted = $this->getQueryBus()->handle(new GetShipmentForViewing($shipmentId));
+
         $shipmentProducts = $this->getQueryBus()->handle(
             new GetShipmentProducts($shipmentId)
         );
 
+        Assert::assertTrue($getShipmentDeleted->isDeleted());
         Assert::assertEmpty($shipmentProducts);
     }
 
@@ -286,5 +464,198 @@ class ShipmentFeatureContext extends AbstractDomainFeatureContext
         $this->getCommandBus()->handle(
             new DeleteProductFromShipment($shipmentId, $orderReferenceIds)
         );
+    }
+
+    /**
+     * @When I fulfill the shipment :shipmentReference with tracking number :trackingNumber
+     */
+    public function fulfillShipment(string $shipmentReference, string $trackingNumber): void
+    {
+        $shipmentId = SharedStorage::getStorage()->get($shipmentReference);
+
+        try {
+            $this->getCommandBus()->handle(new FulfillShipmentCommand($shipmentId, $trackingNumber));
+        } catch (Exception $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @When I try to fulfill a non-existing shipment with tracking number :trackingNumber
+     */
+    public function tryToFulfillNonExistingShipment(string $trackingNumber): void
+    {
+        try {
+            $this->getCommandBus()->handle(new FulfillShipmentCommand(999, $trackingNumber));
+        } catch (Exception $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @Then the shipment :shipmentReference should have tracking number :trackingNumber
+     */
+    public function assertShipmentTrackingNumber(string $shipmentReference, string $trackingNumber): void
+    {
+        $shipmentId = SharedStorage::getStorage()->get($shipmentReference);
+        /** @var ShipmentRepository $shipmentRepository */
+        $shipmentRepository = $this->getContainer()->get(ShipmentRepository::class);
+        $shipment = $shipmentRepository->findById($shipmentId);
+
+        Assert::assertNotNull($shipment, sprintf('Shipment with id "%d" was not found', $shipmentId));
+        Assert::assertEquals(
+            $trackingNumber,
+            $shipment->getTrackingNumber(),
+            sprintf('Expected tracking number "%s", got "%s"', $trackingNumber, $shipment->getTrackingNumber())
+        );
+    }
+
+    /**
+     * @Then the shipment :shipmentReference should be packed
+     */
+    public function assertShipmentIsPacked(string $shipmentReference): void
+    {
+        $shipmentId = SharedStorage::getStorage()->get($shipmentReference);
+        /** @var ShipmentRepository $shipmentRepository */
+        $shipmentRepository = $this->getContainer()->get(ShipmentRepository::class);
+        $shipment = $shipmentRepository->findById($shipmentId);
+
+        Assert::assertNotNull($shipment, sprintf('Shipment with id "%d" was not found', $shipmentId));
+        Assert::assertNotNull(
+            $shipment->getPackedAt(),
+            sprintf('Shipment with id "%d" is not packed (packed_at is null)', $shipmentId)
+        );
+    }
+
+    /**
+     * @When I try to fulfill the shipment :shipmentReference with an empty tracking number
+     */
+    public function tryToFulfillShipmentWithEmptyTrackingNumber(string $shipmentReference): void
+    {
+        $shipmentId = SharedStorage::getStorage()->get($shipmentReference);
+
+        try {
+            $this->getCommandBus()->handle(new FulfillShipmentCommand($shipmentId, ''));
+        } catch (Exception $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @When I try to fulfill the shipment :shipmentReference with a whitespace-only tracking number
+     */
+    public function tryToFulfillShipmentWithWhitespaceTrackingNumber(string $shipmentReference): void
+    {
+        $shipmentId = SharedStorage::getStorage()->get($shipmentReference);
+
+        try {
+            $this->getCommandBus()->handle(new FulfillShipmentCommand($shipmentId, '   '));
+        } catch (Exception $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @Then I should get an error that the tracking number is invalid
+     */
+    public function assertInvalidShipmentTrackingNumberException(): void
+    {
+        $this->assertLastErrorIs(InvalidShipmentTrackingNumberException::class);
+    }
+
+    /**
+     * @Then I should get an error that the shipment was not found
+     */
+    public function assertShipmentNotFoundException(): void
+    {
+        $this->assertLastErrorIs(ShipmentNotFoundException::class);
+    }
+
+    /**
+     * @Then the product :productName in the order :orderReference is linked to shipments:
+     */
+    public function assertProductIsLinkedToShipments(
+        string $productName,
+        string $orderReference,
+        TableNode $table
+    ): void {
+        $expectedShipments = $table->getColumnsHash();
+        $orderId = $this->referenceToId($orderReference);
+
+        $orderDetails = (new Order($orderId))->getOrderDetailList();
+        $orderDetailId = null;
+
+        foreach ($orderDetails as $orderDetail) {
+            if ($orderDetail['product_name'] === $productName) {
+                $orderDetailId = (int) $orderDetail['id_order_detail'];
+                break;
+            }
+        }
+
+        Assert::assertNotNull(
+            $orderDetailId,
+            sprintf('Product "%s" was not found in order "%s"', $productName, $orderReference)
+        );
+
+        /** @var ShipmentForOrderDetail[] $shipments */
+        $shipments = $this->getQueryBus()->handle(
+            new GetShipmentsForOrderDetail($orderId, $orderDetailId)
+        );
+
+        foreach ($expectedShipments as $expected) {
+            $expectedShipmentId = SharedStorage::getStorage()->get($expected['shipment']);
+            $expectedQuantity = (int) $expected['quantity'];
+
+            $matchedShipment = array_filter(
+                $shipments,
+                fn ($shipment) => $shipment->getShipmentId() === $expectedShipmentId
+            );
+
+            Assert::assertNotEmpty(
+                $matchedShipment,
+                sprintf('Shipment "%s" was not found for product "%s"', $expected['shipment'], $productName)
+            );
+
+            $shipment = array_shift($matchedShipment);
+
+            Assert::assertEquals(
+                $expectedQuantity,
+                $shipment->getQuantity(),
+                sprintf(
+                    'Expected quantity %d for shipment "%s", got %d',
+                    $expectedQuantity,
+                    $expected['shipment'],
+                    $shipment->getQuantity()
+                )
+            );
+        }
+    }
+
+    /**
+     * @Then order :orderReference should have the following shipping totals:
+     */
+    public function assertOrderShippingTotals(string $orderReference, TableNode $table): void
+    {
+        $data = $table->getRowsHash();
+        $orderId = $this->referenceToId($orderReference);
+        $order = new Order($orderId);
+
+        if (isset($data['total_shipping_tax_excl'])) {
+            Assert::assertEqualsWithDelta(
+                (float) $data['total_shipping_tax_excl'],
+                (float) $order->total_shipping_tax_excl,
+                0.001,
+                sprintf('Expected total_shipping_tax_excl %.4f, got %.4f', $data['total_shipping_tax_excl'], $order->total_shipping_tax_excl)
+            );
+        }
+
+        if (isset($data['total_shipping_tax_incl'])) {
+            Assert::assertEqualsWithDelta(
+                (float) $data['total_shipping_tax_incl'],
+                (float) $order->total_shipping_tax_incl,
+                0.001,
+                sprintf('Expected total_shipping_tax_incl %.4f, got %.4f', $data['total_shipping_tax_incl'], $order->total_shipping_tax_incl)
+            );
+        }
     }
 }

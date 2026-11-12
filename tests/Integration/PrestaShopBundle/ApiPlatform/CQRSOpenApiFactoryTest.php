@@ -12,6 +12,13 @@ use ApiPlatform\OpenApi\Model\SecurityScheme;
 use ApiPlatform\OpenApi\Model\Server;
 use ApiPlatform\OpenApi\OpenApi;
 use ArrayObject;
+use PrestaShop\PrestaShop\Core\Domain\Carrier\ValueObject\OutOfRangeBehavior;
+use PrestaShop\PrestaShop\Core\Domain\Carrier\ValueObject\ShippingMethod;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyDefinition;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyDefinitionRepositoryInterface;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyDefinitionWriterInterface;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyScope;
+use PrestaShop\PrestaShop\Core\ExtraProperty\Definition\ExtraPropertyType;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 class CQRSOpenApiFactoryTest extends KernelTestCase
@@ -50,6 +57,37 @@ class CQRSOpenApiFactoryTest extends KernelTestCase
         foreach ($expectedScopes as $scope => $scopeDefinition) {
             $this->assertNotEmpty($clientCredentialsFlow->getScopes()[$scope]);
             $this->assertEquals($scopeDefinition, $clientCredentialsFlow->getScopes()[$scope]);
+        }
+    }
+
+    public function testVersionedOperationsAreFiltered(): void
+    {
+        /** @var OpenApiFactoryInterface $openApiFactory */
+        $openApiFactory = $this->getContainer()->get(OpenApiFactoryInterface::class);
+        /** @var OpenApi $openApi */
+        $openApi = $openApiFactory->__invoke();
+
+        // The core version compatibility filtering applies in debug mode as well (unless the experimental
+        // endpoints feature flag is enabled), so the versioned test operations incompatible with the core
+        // version are absent from the OpenApi documentation while the compatible ones are present (this
+        // also validates that the minVersion/maxVersion extra properties don't break the OpenApi generation,
+        // the full filtering behaviour is asserted in Tests\Integration\ApiPlatform\VersionedEndpointsTest)
+        $compatiblePaths = [
+            '/test/versioned/min-valid/product/{productId}',
+            '/test/versioned/max-valid/product/{productId}',
+            '/test/versioned/range-valid/product/{productId}',
+        ];
+        foreach ($compatiblePaths as $compatiblePath) {
+            $this->assertNotNull($openApi->getPaths()->getPath($compatiblePath), sprintf('Path %s not found in the OpenApi documentation', $compatiblePath));
+        }
+
+        $incompatiblePaths = [
+            '/test/versioned/min-invalid/product/{productId}',
+            '/test/versioned/max-invalid/product/{productId}',
+            '/test/versioned/range-invalid/product/{productId}',
+        ];
+        foreach ($incompatiblePaths as $incompatiblePath) {
+            $this->assertNull($openApi->getPaths()->getPath($incompatiblePath), sprintf('Path %s should have been filtered from the OpenApi documentation', $incompatiblePath));
         }
     }
 
@@ -476,6 +514,10 @@ class CQRSOpenApiFactoryTest extends KernelTestCase
                         ],
                     ]),
                 ],
+                // The productType parameter of the command has no default value, the localizedNames one has
+                'required' => [
+                    'type',
+                ],
             ]),
         ];
 
@@ -677,6 +719,151 @@ class CQRSOpenApiFactoryTest extends KernelTestCase
             ]),
         ];
 
+        // AddCarrierCommand is the interesting case for the CQRSCommandMapping: its constructor parameters are
+        // named differently from the accessors ApiPlatform detects the properties from ($max_width against
+        // getMaxWidth, $isFree against isFree, $hasAdditionalHandlingFee against hasAdditionalHandlingFee), so
+        // those properties used to be documented as read only, and then removed from the payload, although the
+        // command requires them.
+        yield 'Carrier input for creation, mapped properties are all documented as writable' => [
+            'Carrier.AddCarrierCommand',
+            new ArrayObject([
+                'type' => 'object',
+                'description' => '',
+                'deprecated' => false,
+                'properties' => [
+                    'name' => new ArrayObject([
+                        'type' => 'string',
+                    ]),
+                    'grade' => new ArrayObject([
+                        'type' => 'integer',
+                    ]),
+                    'trackingUrl' => new ArrayObject([
+                        'type' => 'string',
+                    ]),
+                    'position' => new ArrayObject([
+                        'type' => 'integer',
+                    ]),
+                    // Constructor parameters in snake_case, detected via their getters
+                    'maxWidth' => new ArrayObject([
+                        'type' => 'integer',
+                    ]),
+                    'maxHeight' => new ArrayObject([
+                        'type' => 'integer',
+                    ]),
+                    'maxDepth' => new ArrayObject([
+                        'type' => 'integer',
+                    ]),
+                    'maxWeight' => new ArrayObject([
+                        'type' => 'number',
+                        'example' => 42.99,
+                    ]),
+                    // The identifier collections are documented as integers by the openapiContext of the resource,
+                    // the command only exposes them as arrays of strings
+                    'associatedGroupIds' => new ArrayObject([
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'integer',
+                        ],
+                    ]),
+                    // Constructor parameters detected via their has/is accessors, defaulted by the operation so their
+                    // default value is documented and they are absent from the required properties below
+                    'additionalHandlingFee' => new ArrayObject([
+                        'type' => 'boolean',
+                        'default' => false,
+                    ]),
+                    'free' => new ArrayObject([
+                        'type' => 'boolean',
+                        'default' => false,
+                    ]),
+                    'shippingMethod' => new ArrayObject([
+                        'type' => 'integer',
+                        'default' => ShippingMethod::BY_PRICE,
+                    ]),
+                    'rangeBehavior' => new ArrayObject([
+                        'type' => 'integer',
+                        'default' => OutOfRangeBehavior::USE_HIGHEST_RANGE,
+                    ]),
+                    'associatedShopIds' => new ArrayObject([
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'integer',
+                        ],
+                    ]),
+                    'zones' => new ArrayObject([
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'integer',
+                        ],
+                    ]),
+                    // Renamed by the mapping, the localizedDelay and active parameters are not documented
+                    'delays' => new ArrayObject([
+                        'type' => 'object',
+                        'example' => [
+                            'en-US' => 'value',
+                            'fr-FR' => 'valeur',
+                        ],
+                    ]),
+                    'enabled' => new ArrayObject([
+                        'type' => 'boolean',
+                    ]),
+                ],
+                // Every parameter of the command without a default value, so the ones the request must provide.
+                // The carrierId is absent since it is a URI variable, the shop constraint since the API fills it from
+                // the request context, and the five defaulted fields since the operation fills them: the four fields
+                // above with literal values, and the associatedShopIds with a context default resolved per request
+                // (the shops of the request context), which is why it is not required despite having no literal value.
+                'required' => [
+                    'name',
+                    'delays',
+                    'grade',
+                    'trackingUrl',
+                    'enabled',
+                    'associatedGroupIds',
+                    'zones',
+                ],
+            ]),
+        ];
+
+        // The openapiContext declared on the resource must win over the format detected from the CQRS command, here
+        // SetCarrierRangesCommand only exposes an array of ranges so the collection of objects documented by the
+        // resource used to be reduced to a collection of strings in the request body.
+        yield 'Carrier ranges input, the openapiContext of the resource is applied on the command schema' => [
+            'CarrierRanges.SetCarrierRangesCommand',
+            new ArrayObject([
+                'type' => 'object',
+                'description' => '',
+                'deprecated' => false,
+                'properties' => [
+                    'carrierId' => new ArrayObject([
+                        'type' => 'integer',
+                    ]),
+                    'ranges' => new ArrayObject([
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'zoneId' => [
+                                    'type' => 'integer',
+                                ],
+                                'rangeFrom' => [
+                                    'type' => 'number',
+                                ],
+                                'rangeTo' => [
+                                    'type' => 'number',
+                                ],
+                                'rangePrice' => [
+                                    'type' => 'number',
+                                ],
+                            ],
+                        ],
+                    ]),
+                ],
+                'required' => [
+                    'ranges',
+                ],
+            ]),
+        ];
+
         yield 'Product list output, we need to check ApiResourceMapping is correctly applied' => [
             'ProductList',
             new ArrayObject([
@@ -800,6 +987,42 @@ class CQRSOpenApiFactoryTest extends KernelTestCase
         ];
     }
 
+    public function testMultipartFileUploadRequestBody(): void
+    {
+        /** @var OpenApiFactoryInterface $openApiFactory */
+        $openApiFactory = $this->getContainer()->get(OpenApiFactoryInterface::class);
+        /** @var OpenApi $openApi */
+        $openApi = $openApiFactory->__invoke();
+
+        // The multipart operation documents the uploaded file properties declared in the API resource class
+        $multipartOperation = $openApi->getPaths()->getPath('/test/file-upload')->getPost();
+        $content = $multipartOperation->getRequestBody()->getContent();
+        $this->assertTrue($content->offsetExists('multipart/form-data'));
+
+        $schema = $content->offsetGet('multipart/form-data')->getSchema();
+        // The schema is inlined so that file properties are only documented on the multipart operation
+        $this->assertArrayNotHasKey('$ref', (array) $schema);
+        $this->assertArrayHasKey('productId', $schema['properties']);
+        $this->assertEquals(['type' => 'string', 'format' => 'binary'], (array) $schema['properties']['file']);
+        $this->assertEquals(['type' => 'string', 'format' => 'binary'], (array) $schema['properties']['optionalFile']);
+        // Non-nullable file properties are required, nullable ones are optional
+        $this->assertContains('file', $schema['required']);
+        $this->assertNotContains('optionalFile', $schema['required']);
+
+        // The JSON operation based on the same CQRS command keeps its schema reference, and the
+        // shared component schema is not polluted by the file properties
+        $jsonOperation = $openApi->getPaths()->getPath('/test/file-upload-json')->getPost();
+        $jsonContent = $jsonOperation->getRequestBody()->getContent();
+        $this->assertFalse($jsonContent->offsetExists('multipart/form-data'));
+
+        $jsonSchema = $jsonContent->offsetGet('application/json')->getSchema();
+        $this->assertEquals('#/components/schemas/FileUploadResource.AddProductImageCommand', $jsonSchema['$ref']);
+
+        $componentSchema = $openApi->getComponents()->getSchemas()['FileUploadResource.AddProductImageCommand'];
+        $this->assertArrayNotHasKey('file', (array) $componentSchema['properties']);
+        $this->assertArrayNotHasKey('optionalFile', (array) $componentSchema['properties']);
+    }
+
     public function testApiPropertyOpenApiContextApplied(): void
     {
         /** @var OpenApiFactoryInterface $openApiFactory */
@@ -815,5 +1038,100 @@ class CQRSOpenApiFactoryTest extends KernelTestCase
         $this->assertEquals('array', $shopIdsProperty['type']);
         $this->assertEquals(['type' => 'integer'], $shopIdsProperty['items']);
         $this->assertEquals([1, 3], $shopIdsProperty['example']);
+    }
+
+    /**
+     * Module-declared extra properties are documented in the generated OpenAPI schema: grouped under their module
+     * technical name inside a synthetic "extraProperties" object on every resource whose operations they target,
+     * a definition flagged required (ExtraPropertyDefinition::isRequired()) is listed in that module object's
+     * OpenAPI "required" array, and a declared defaultValue is emitted as the field's "default" with its scalar
+     * type (decoded for JSON, whose runtime read shape is the decoded structure). The definitions are persisted
+     * directly (no module install needed) and removed afterwards so the shared test database stays clean.
+     */
+    public function testExtraPropertiesAreDocumentedInGeneratedSchema(): void
+    {
+        $repository = $this->getContainer()->get(ExtraPropertyDefinitionRepositoryInterface::class);
+        // The shared cache decorator also implements the writer interface (and invalidates the cache on write),
+        // so we can persist definitions directly and have them surface in the very next schema generation.
+        self::assertInstanceOf(ExtraPropertyDefinitionWriterInterface::class, $repository);
+
+        $productApis = ['/products', '/products/{productId}'];
+        $requiredDefinition = new ExtraPropertyDefinition(
+            entityName: 'product',
+            propertyName: 'oa_required_url',
+            type: ExtraPropertyType::STRING,
+            scope: ExtraPropertyScope::COMMON,
+            moduleName: 'openapitest',
+            required: true,
+            associatedApis: $productApis,
+        );
+        $optionalDefinition = new ExtraPropertyDefinition(
+            entityName: 'product',
+            propertyName: 'oa_optional_flag',
+            type: ExtraPropertyType::BOOL,
+            scope: ExtraPropertyScope::COMMON,
+            moduleName: 'openapitest',
+            required: false,
+            defaultValue: false,
+            associatedApis: $productApis,
+        );
+        $jsonDefinition = new ExtraPropertyDefinition(
+            entityName: 'product',
+            propertyName: 'oa_json_meta',
+            type: ExtraPropertyType::JSON,
+            scope: ExtraPropertyScope::COMMON,
+            moduleName: 'openapitest',
+            required: false,
+            defaultValue: '{"tier":"bronze"}',
+            associatedApis: $productApis,
+        );
+
+        $requiredId = $repository->save($requiredDefinition);
+        $optionalId = $repository->save($optionalDefinition);
+        $jsonId = $repository->save($jsonDefinition);
+        $moduleKey = $requiredDefinition->getNormalizedModuleKey();
+
+        try {
+            /** @var OpenApiFactoryInterface $openApiFactory */
+            $openApiFactory = $this->getContainer()->get(OpenApiFactoryInterface::class);
+            /** @var OpenApi $openApi */
+            $openApi = $openApiFactory->__invoke();
+
+            $schemas = $openApi->getComponents()->getSchemas();
+            $this->assertArrayHasKey('Product', $schemas);
+
+            /** @var ArrayObject $productSchema */
+            $productSchema = $schemas['Product'];
+            $this->assertArrayHasKey('extraProperties', $productSchema['properties']);
+
+            // The synthetic object is an object grouped by module technical name.
+            $extraProperties = $productSchema['properties']['extraProperties'];
+            $this->assertSame('object', $extraProperties['type']);
+            $this->assertArrayHasKey($moduleKey, $extraProperties['properties']);
+
+            $module = $extraProperties['properties'][$moduleKey];
+            // All fields are documented under the module object …
+            $this->assertArrayHasKey('oa_required_url', $module['properties']);
+            $this->assertArrayHasKey('oa_optional_flag', $module['properties']);
+            $this->assertArrayHasKey('oa_json_meta', $module['properties']);
+            // … but only the required one is reported in the module object's OpenAPI "required" list.
+            $this->assertSame(['oa_required_url'], $module['required']);
+
+            // A declared default is emitted with its scalar type; JSON defaults are stored as
+            // strings but documented decoded, matching the runtime read shape of the API.
+            $this->assertArrayNotHasKey('default', $module['properties']['oa_required_url']);
+            $this->assertFalse($module['properties']['oa_optional_flag']['default']);
+            $this->assertSame(['tier' => 'bronze'], $module['properties']['oa_json_meta']['default']);
+        } finally {
+            if (!empty($requiredId)) {
+                $repository->delete((int) $requiredId);
+            }
+            if (!empty($optionalId)) {
+                $repository->delete((int) $optionalId);
+            }
+            if (!empty($jsonId)) {
+                $repository->delete((int) $jsonId);
+            }
+        }
     }
 }

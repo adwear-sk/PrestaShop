@@ -27,10 +27,12 @@ class Connection extends ConnectionCore
      */
     private const UNTRACKED_PATTERN = '/^$|Chrome\/([1-9]?\d|10\d)\.|Firefox\/([1-9]?\d)\./';
 
-    public static function isBot()
+    public static function isBot($userAgent = null)
     {
-        return parent::isBot()
-            || (isset($_SERVER['HTTP_USER_AGENT']) && preg_match(self::BOT_PATTERN, $_SERVER['HTTP_USER_AGENT']));
+        $userAgent = $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? null);
+
+        return parent::isBot($userAgent)
+            || ($userAgent !== null && preg_match(self::BOT_PATTERN, $userAgent));
     }
 
     /**

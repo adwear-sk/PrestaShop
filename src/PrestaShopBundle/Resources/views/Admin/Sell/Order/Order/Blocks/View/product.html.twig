@@ -31,7 +31,7 @@
           {{ product.supplierReference }}
         </p>
       {% endif %}
-      {% if isImprovedShipmentFeatureFlagEnabled and product.shipmentIds is not empty %}
+      {% if isImprovedShipmentFeatureFlagEnabled is defined and isImprovedShipmentFeatureFlagEnabled and product.shipmentIds is not empty %}
         <p class="mb-0 productShipmentNumber">
           {{ 'Shipment number: %shipment_id%'|trans({
               '%shipment_id%': product.shipmentIds|join(', '),
@@ -48,7 +48,7 @@
   <td class="cellProductUnitPrice">{{ product.unitPrice }}</td>
   <td class="cellProductQuantity text-center">
     {% if product.quantity > 1 %}
-      <span class="badge badge-secondary rounded-circle">{{ product.quantity }}</span>
+      <span class="badge badge-dark rounded-circle">{{ product.quantity }}</span>
     {% else %}
       {{ product.quantity }}
     {% endif %}
@@ -72,8 +72,13 @@
     <td class="text-right cellProductActions">
       <button
         type="button"
+        {% if isImprovedShipmentFeatureFlagEnabled is defined and isImprovedShipmentFeatureFlagEnabled == true and orderHasShipment == true %}
+          data-toggle="modal"
+          data-target="#editOrderProductModal"
+        {% else %}
+          data-toggle="pstooltip"
+        {% endif %}
         class="btn tooltip-link js-order-product-edit-btn"
-        data-toggle="pstooltip"
         data-placement="top"
         data-original-title="{{ 'Edit'|trans({}, 'Admin.Actions') }}"
         data-order-detail-id="{{ product.orderDetailId }}"
@@ -162,7 +167,14 @@
         </div>
       {% endif %}
       {% for customization in product.customizations.textCustomizations %}
-        <p><strong>{{ customization.name }} :</strong> {{ customization.value }}</p>
+        <p>
+          <strong>{{ customization.name }} :</strong>
+          {% if customization.htmlAllowed %}
+            {{ customization.value|raw_purified }}
+          {% else %}
+            {{ customization.value }}
+          {% endif %}
+        </p>
       {% endfor %}
       {% if product.type == constant('PrestaShop\\PrestaShop\\Core\\Domain\\Order\\QueryResult\\OrderProductForViewing::TYPE_PACK') %}
         <div class="btn-product-pack-modal mb-3 d-print-none" data-toggle="modal" data-target="#product-pack-modal" data-pack-items="{{ product.packItems|json_encode }}">

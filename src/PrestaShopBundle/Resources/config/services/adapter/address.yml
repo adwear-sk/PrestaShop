@@ -61,11 +61,6 @@ services:
   prestashop.adapter.address.formatter:
     class: 'PrestaShop\PrestaShop\Adapter\Address\AddressFormatter'
 
-  PrestaShop\PrestaShop\Adapter\Address\Repository\AddressRepository:
-    arguments:
-      - '@doctrine.dbal.default_connection'
-      - '%database_prefix%'
-
   # Adwear: DIČ field on the back-office address form (hook subscriber, not a kernel listener)
   PrestaShop\PrestaShop\Adapter\Address\AddressDicHookSubscriber:
     public: false

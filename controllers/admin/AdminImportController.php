@@ -5,6 +5,7 @@
  */
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Writer\Csv;
+use PrestaShop\PrestaShop\Core\Security\PharDetector;
 
 @ini_set('max_execution_time', '0');
 /* No max line limit since the lines can be more than 4096. Performance impact is not significant. */
@@ -71,9 +72,15 @@ class AdminImportControllerCore extends AdminController
      */
     private $importExecuted = false;
 
+    /**
+     * @var PharDetector
+     */
+    private $pharDetector;
+
     public function __construct()
     {
         $this->bootstrap = true;
+        $this->pharDetector = new PharDetector();
 
         parent::__construct();
 
@@ -689,6 +696,8 @@ class AdminImportControllerCore extends AdminController
             }
         } elseif (!preg_match('#([^\.]*?)\.(csv|xls[xt]?|o[dt]s)$#is', $_FILES['file']['name'])) {
             $_FILES['file']['error'] = $this->trans('The extension of your file should be ".csv".', [], 'Admin.Advparameters.Notification');
+        } elseif ($this->pharDetector->isPhar($_FILES['file']['tmp_name'])) {
+            $_FILES['file']['error'] = $this->trans('The uploaded file is not a valid import file.', [], 'Admin.Advparameters.Notification');
         } elseif (!@filemtime($_FILES['file']['tmp_name'])
             || !@move_uploaded_file($_FILES['file']['tmp_name'], AdminImportController::getPath() . $filename_prefix . str_replace("\0", '', $_FILES['file']['name']))) {
             $_FILES['file']['error'] = $this->trans('An error occurred while uploading / copying the file.', [], 'Admin.Advparameters.Notification');
@@ -1832,7 +1841,7 @@ class AdminImportControllerCore extends AdminController
                 if ($product->getType() == Product::PTYPE_VIRTUAL) {
                     $product_download = new ProductDownload();
                     $product_download->filename = ProductDownload::getNewFilename();
-                    Tools::copy($info['file_url'], _PS_DOWNLOAD_DIR_ . $product_download->filename);
+                    Tools::copyFromUntrustedSource($info['file_url'], _PS_DOWNLOAD_DIR_ . $product_download->filename);
                     $product_download->id_product = (int) $product->id;
                     $product_download->nb_downloadable = (int) $info['nb_downloadable'];
                     $product_download->date_expiration = $info['date_expiration'];
@@ -2356,7 +2365,7 @@ class AdminImportControllerCore extends AdminController
                     $obj->group_type = pSQL($type);
                     $obj->name[$default_language] = $group;
                     $obj->public_name[$default_language] = $group;
-                    $obj->position = (!$position) ? AttributeGroup::getHigherPosition() + 1 : $position;
+                    $obj->position = (!$position) ? AttributeGroup::getHighestPosition() + 1 : $position;
 
                     if (($field_error = $obj->validateFields(UNFRIENDLY_ERROR, true)) === true
                         && ($lang_field_error = $obj->validateFieldsLang(UNFRIENDLY_ERROR, true)) === true) {
@@ -2410,7 +2419,7 @@ class AdminImportControllerCore extends AdminController
                         // sets the proper id (corresponding to the right key)
                         $obj->id_attribute_group = $groups_attributes[$key]['id'];
                         $obj->name[$default_language] = str_replace('\n', '', str_replace('\r', '', $attribute));
-                        $obj->position = (!$position && isset($groups[$group])) ? ProductAttribute::getHigherPosition($groups[$group]) + 1 : $position;
+                        $obj->position = (!$position && isset($groups[$group])) ? ProductAttribute::getHighestPosition($groups[$group]) + 1 : $position;
 
                         if (($field_error = $obj->validateFields(UNFRIENDLY_ERROR, true)) === true
                             && ($lang_field_error = $obj->validateFieldsLang(UNFRIENDLY_ERROR, true)) === true) {

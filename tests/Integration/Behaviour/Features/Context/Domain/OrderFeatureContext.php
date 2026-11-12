@@ -69,6 +69,9 @@ use TaxManagerFactory;
 use Tests\Integration\Behaviour\Features\Context\CommonFeatureContext;
 use Tests\Integration\Behaviour\Features\Context\SharedStorage;
 use Tests\Integration\Behaviour\Features\Context\Util\PrimitiveUtils;
+use Tests\Integration\Utility\OrderCartRulesOverridingPaymentModuleFake;
+use Tests\Integration\Utility\OrderCartRulesPaymentModuleFake;
+use Tests\Integration\Utility\OrderCreationFailingPaymentModuleFake;
 use Tests\Resources\TestCase\ExtendedTestCaseMethodsTrait;
 
 class OrderFeatureContext extends AbstractDomainFeatureContext
@@ -141,6 +144,58 @@ class OrderFeatureContext extends AbstractDomainFeatureContext
     }
 
     /**
+     * @When I validate cart :cartReference with a payment module failing to create the order
+     */
+    public function validateCartWithOrderCreationFailingPaymentModule(string $cartReference): void
+    {
+        $cartId = (int) SharedStorage::getStorage()->get($cartReference);
+
+        try {
+            (new OrderCreationFailingPaymentModuleFake())->validateOrder(
+                $cartId,
+                (int) Configuration::get('PS_OS_BANKWIRE'),
+                (new Cart($cartId))->getOrderTotal()
+            );
+        } catch (PrestaShopException $e) {
+            $this->setLastException($e);
+        }
+    }
+
+    /**
+     * @When I validate cart :cartReference with a payment module overriding the order cart rules creation
+     */
+    public function validateCartWithOrderCartRulesOverridingPaymentModule(string $cartReference): void
+    {
+        $cartId = (int) SharedStorage::getStorage()->get($cartReference);
+
+        (new OrderCartRulesOverridingPaymentModuleFake())->validateOrder(
+            $cartId,
+            (int) Configuration::get('PS_OS_BANKWIRE'),
+            (new Cart($cartId))->getOrderTotal()
+        );
+    }
+
+    /**
+     * @When I add the cart rules of cart :cartReference to order :orderReference with a payment module validating orders on its own
+     */
+    public function addCartRulesToOrderWithOwnOrderValidation(string $cartReference, string $orderReference): void
+    {
+        (new OrderCartRulesPaymentModuleFake())->addCartRulesToOrder(
+            new Order((int) SharedStorage::getStorage()->get($orderReference)),
+            new Cart((int) SharedStorage::getStorage()->get($cartReference)),
+            (int) Configuration::get('PS_OS_BANKWIRE')
+        );
+    }
+
+    /**
+     * @Then I should get error that the order creation failed
+     */
+    public function assertLastErrorIsOrderCreationFailure(): void
+    {
+        $this->assertLastErrorIs(PrestaShopException::class);
+    }
+
+    /**
      * @When I add order :orderReference from cart :cartReference with :paymentModuleName payment method and :orderStatus order status
      *
      * @param string $orderReference
@@ -206,6 +261,18 @@ class OrderFeatureContext extends AbstractDomainFeatureContext
             if (isset($data['free_shipping'])) {
                 $hasFreeShipping = PrimitiveUtils::castStringBooleanIntoBoolean($data['free_shipping']);
             }
+            $shipmentId = null;
+            if (!empty($data['shipment_id'])) {
+                $shipmentId = (int) SharedStorage::getStorage()->get($data['shipment_id']);
+            }
+            $carrierId = null;
+            if (!empty($data['carrier_id'])) {
+                $carrierId = (int) SharedStorage::getStorage()->get($data['carrier_id']);
+            }
+            $isVirtual = null;
+            if (isset($data['is_virtual'])) {
+                $isVirtual = PrimitiveUtils::castStringBooleanIntoBoolean($data['is_virtual']);
+            }
             $this->getCommandBus()->handle(
                 AddProductToOrderCommand::withNewInvoice(
                     $orderId,
@@ -214,7 +281,10 @@ class OrderFeatureContext extends AbstractDomainFeatureContext
                     $data['price_tax_incl'],
                     $data['price'],
                     (int) $data['amount'],
-                    $hasFreeShipping
+                    $hasFreeShipping,
+                    $shipmentId,
+                    $carrierId,
+                    $isVirtual
                 )
             );
         } catch (InvalidProductQuantityException $e) {
@@ -657,6 +727,20 @@ class OrderFeatureContext extends AbstractDomainFeatureContext
                 ->addTaxes($data['price']);
         }
 
+        $shipments = null;
+
+        if (!empty($data['shipment_mapping'])) {
+            $shipments = [];
+
+            foreach (explode(',', $data['shipment_mapping']) as $pair) {
+                list($shipmentRef, $qty) = explode(':', trim($pair));
+                $shipments[] = [
+                    'shipment_id' => (int) SharedStorage::getStorage()->get(trim($shipmentRef)),
+                    'quantity' => (int) $qty,
+                ];
+            }
+        }
+
         try {
             $this->getCommandBus()->handle(
                 new UpdateProductInOrderCommand(
@@ -665,7 +749,8 @@ class OrderFeatureContext extends AbstractDomainFeatureContext
                     $data['price_tax_incl'],
                     $data['price'],
                     (int) $data['amount'],
-                    $invoiceId
+                    $invoiceId,
+                    $shipments
                 )
             );
         } catch (InvalidProductQuantityException $e) {
@@ -1362,6 +1447,17 @@ class OrderFeatureContext extends AbstractDomainFeatureContext
         $this->assertLastErrorIs(
             InvalidCartRuleDiscountValueException::class,
             InvalidCartRuleDiscountValueException::INVALID_MIN_AMOUNT
+        );
+    }
+
+    /**
+     * @Then I should get error that order already has a free shipping discount
+     */
+    public function assertDuplicateFreeShippingCartRule(): void
+    {
+        $this->assertLastErrorIs(
+            InvalidCartRuleDiscountValueException::class,
+            InvalidCartRuleDiscountValueException::DUPLICATE_FREE_SHIPPING
         );
     }
 

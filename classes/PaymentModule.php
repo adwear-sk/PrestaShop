@@ -3,9 +3,15 @@
  * For the full copyright and license information, please view the
  * docs/licenses/LICENSE.txt file that was distributed with this source code.
  */
+
+use PrestaShop\PrestaShop\Adapter\CartRule\CartRuleQuantityReserver;
 use PrestaShop\PrestaShop\Adapter\MailTemplate\MailPartialTemplateRenderer;
+use PrestaShop\PrestaShop\Adapter\Order\OrderCreationLock;
 use PrestaShop\PrestaShop\Adapter\Shipment\OrderShipmentCreator;
+use PrestaShop\PrestaShop\Adapter\Shipment\OrderShipmentService;
+use PrestaShop\PrestaShop\Adapter\Shipment\ShipmentShippingCostUpdater;
 use PrestaShop\PrestaShop\Adapter\StockManager;
+use PrestaShop\PrestaShop\Core\Addon\Module\ModuleManagerBuilder;
 use PrestaShop\PrestaShop\Core\FeatureFlag\FeatureFlagSettings;
 use PrestaShop\PrestaShop\Core\FeatureFlag\FeatureFlagStateCheckerInterface;
 
@@ -21,6 +27,22 @@ abstract class PaymentModuleCore extends Module
 
     /** @var MailPartialTemplateRenderer|null */
     protected $partialRenderer;
+
+    /**
+     * Cart rules whose quantity was taken by the current validateOrder() call
+     *
+     * @var array<int, true>
+     */
+    private $reservedCartRules = [];
+
+    /**
+     * Orders created by the current validateOrder() call that use the quantity of their cart rules
+     *
+     * @var int[]
+     */
+    private $orderIdsUsingCartRuleQuantities = [];
+
+    private ?OrderCreationLock $orderCreationLock = null;
 
     public function install()
     {
@@ -200,6 +222,75 @@ abstract class PaymentModuleCore extends Module
         ?Shop $shop = null,
         ?string $order_reference = null
     ) {
+        $orderCreationLock = $this->getOrderCreationLock();
+        if (!$orderCreationLock->acquire((int) $id_cart)) {
+            PrestaShopLogger::addLog('PaymentModule::validateOrder - Another order is already being created from this cart', 3, null, 'Cart', (int) $id_cart, true);
+
+            throw new PrestaShopException('Error processing order. Another order is already being created from this cart.');
+        }
+
+        try {
+            $this->reservedCartRules = [];
+            $this->orderIdsUsingCartRuleQuantities = [];
+
+            try {
+                return $this->validateOrderWithCartRuleReservations(
+                    $id_cart,
+                    $id_order_state,
+                    $amount_paid,
+                    $payment_method,
+                    $message,
+                    $extra_vars,
+                    $currency_special,
+                    $dont_touch_amount,
+                    $secure_key,
+                    $shop,
+                    $order_reference
+                );
+            } finally {
+                // Also gives back the quantities taken when the validation stops on an exception
+                $this->releaseUnusedCartRuleQuantities();
+            }
+        } finally {
+            $orderCreationLock->release((int) $id_cart);
+        }
+    }
+
+    /**
+     * Same contract as validateOrder(). Must only run while the cart's OrderCreationLock is held,
+     * so that the "order already placed" check and the order INSERTs cannot interleave with
+     * another request on the same cart. The cart rule quantities it takes and that no order uses
+     * are given back by validateOrder() once it ends, whether it returns or throws.
+     *
+     * @param int $id_cart
+     * @param int $id_order_state
+     * @param float $amount_paid
+     * @param string $payment_method
+     * @param string|null $message
+     * @param array $extra_vars
+     * @param int|null $currency_special
+     * @param bool $dont_touch_amount
+     * @param string|bool $secure_key
+     * @param Shop|null $shop
+     * @param string|null $order_reference
+     *
+     * @return bool
+     *
+     * @throws PrestaShopException
+     */
+    private function validateOrderWithCartRuleReservations(
+        $id_cart,
+        $id_order_state,
+        $amount_paid,
+        $payment_method,
+        $message,
+        $extra_vars,
+        $currency_special,
+        $dont_touch_amount,
+        $secure_key,
+        ?Shop $shop,
+        ?string $order_reference
+    ) {
         if (self::DEBUG_MODE) {
             PrestaShopLogger::addLog('PaymentModule::validateOrder - Function called', 1, null, 'Cart', (int) $id_cart, true);
         }
@@ -211,6 +302,7 @@ abstract class PaymentModuleCore extends Module
             'id_order_state' => &$id_order_state,
             'payment_method' => $payment_method,
         ]);
+        $orderShipmentService = $this->get(OrderShipmentService::class);
 
         $this->context->cart = new Cart((int) $id_cart);
         $this->context->customer = new Customer((int) $this->context->cart->id_customer);
@@ -246,7 +338,7 @@ abstract class PaymentModuleCore extends Module
             throw new PrestaShopException($error);
         }
 
-        if ($secure_key !== false && $secure_key != $this->context->cart->secure_key) {
+        if ($secure_key !== false && !hash_equals((string) $this->context->cart->secure_key, (string) $secure_key)) {
             PrestaShopLogger::addLog('PaymentModule::validateOrder - Secure key does not match', 3, null, 'Cart', (int) $id_cart, true);
             throw new PrestaShopException('Error processing order. Secure key does not match.');
         }
@@ -298,9 +390,20 @@ abstract class PaymentModuleCore extends Module
         foreach ($cart_rules as $cart_rule) {
             $rule = new CartRule((int) $cart_rule['obj']->id);
             if (Validate::isLoadedObject($rule)) {
-                if ($error = $rule->checkValidity($this->context, true, true)) {
+                $error = $rule->checkValidity($this->context, true, true);
+                // A cart rule with a limited quantity takes its unit now, so that orders validated
+                // at the same time cannot use more units than available
+                if (!$error && $rule->quantity !== null) {
+                    if ($this->getCartRuleQuantityReserver()->reserve((int) $rule->id)) {
+                        $this->reservedCartRules[(int) $rule->id] = true;
+                    } else {
+                        $error = $this->trans('This voucher has already been used', [], 'Shop.Notifications.Error');
+                    }
+                }
+                if ($error) {
                     $this->context->cart->removeCartRule((int) $rule->id);
                     if (!empty($this->context->customer->id) && !empty($rule->code)) {
+                        $this->releaseUnusedCartRuleQuantities();
                         Tools::redirect($this->context->link->getPageLink(
                             'order',
                             null,
@@ -389,6 +492,10 @@ abstract class PaymentModuleCore extends Module
             $order_list[] = $order;
             $order_detail_list[] = $orderData['orderDetail'];
         }
+        // Orders in error or canceled do not use the quantity of their cart rules
+        if ($id_order_state != Configuration::get('PS_OS_ERROR') && $id_order_state != Configuration::get('PS_OS_CANCELED')) {
+            $this->orderIdsUsingCartRuleQuantities = array_map(static fn (Order $order): int => (int) $order->id, $order_list);
+        }
         // The country can only change if the address used for the calculation is the delivery address, and if multi-shipping is activated
         if (Configuration::get('PS_TAX_ADDRESS_TYPE') == 'id_address_delivery' && isset($context_country)) {
             $this->context->country = $context_country;
@@ -469,11 +576,22 @@ abstract class PaymentModuleCore extends Module
 
                 $product_price = Product::getTaxCalculationMethod() == PS_TAX_EXC ? Tools::ps_round($price, Context::getContext()->getComputingPrecision()) : $price_wt;
 
+                $carrierName = null;
+                if ($orderShipmentService->orderHasShipment($order->id)) {
+                    $carrierName = $orderShipmentService->getCarrierForProduct($order->id, (int) $product['id_product'])->name;
+                }
+
                 $product_var_tpl = [
                     'id_product' => $product['id_product'],
                     'id_product_attribute' => $product['id_product_attribute'],
                     'reference' => $product['reference'],
-                    'name' => $product['name'] . (!empty($product['attributes']) ? ' - ' . $product['attributes'] : ''),
+                    'name' => $this->trans(
+                        '%name%%attributes%%carrier%',
+                        [
+                            '%name%' => $product['name'],
+                            '%attributes%' => !empty($product['attributes']) ? $this->trans(' - %attributes%', ['%attributes%' => $product['attributes']], 'Emails.Body') : '',
+                            '%carrier%' => $carrierName ? $this->trans(' - Carrier: %carrier_name%', ['%carrier_name%' => $carrierName], 'Emails.Body') : '',
+                        ], 'Emails.Body'),
                     'price' => Tools::getContextLocale($this->context)->formatPrice($product_price * $product['quantity'], $this->context->currency->iso_code),
                     'quantity' => $product['quantity'],
                     'customization' => [],
@@ -494,7 +612,9 @@ abstract class PaymentModuleCore extends Module
                         $customization_text = '';
                         if (isset($customization['datas'][Product::CUSTOMIZE_TEXTFIELD])) {
                             foreach ($customization['datas'][Product::CUSTOMIZE_TEXTFIELD] as $text) {
-                                $customization_text .= '<strong>' . $text['name'] . '</strong>: ' . htmlspecialchars($text['value'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '<br />';
+                                $customization_text .= '<strong>' . $text['name'] . '</strong>: '
+                                    . $this->formatCustomizationValueForEmail($text)
+                                    . '<br />';
                             }
                         }
 
@@ -641,7 +761,7 @@ abstract class PaymentModuleCore extends Module
                 $orderLanguage = new Language((int) $order->id_lang);
 
                 // Join PDF invoice
-                if ((int) Configuration::get('PS_INVOICE') && $order_status->invoice && $order->invoice_number) {
+                if ((int) Configuration::get('PS_INVOICE') && $order_status->pdf_invoice && $order->invoice_number) {
                     $currentLanguage = $this->context->language;
                     $this->context->language = $orderLanguage;
                     $this->context->getTranslator()->setLocale($orderLanguage->locale);
@@ -662,6 +782,15 @@ abstract class PaymentModuleCore extends Module
                 }
 
                 if (Validate::isEmail($this->context->customer->email)) {
+                    if ($orderShipmentService->orderHasShipment($order->id)) {
+                        $carriers = $orderShipmentService->getAllCarriersForOrder($order->id);
+                        $carrierNames = array_map(fn ($carrier) => $carrier->name, $carriers);
+                        $carrierNames = implode(', ', $carrierNames);
+                    } else {
+                        $carrier = new Carrier($order->id_carrier);
+                        $carrierNames = $carrier->name;
+                    }
+
                     $data = [
                         '{firstname}' => $this->context->customer->firstname,
                         '{lastname}' => $this->context->customer->lastname,
@@ -702,7 +831,7 @@ abstract class PaymentModuleCore extends Module
                         '{order_name}' => $order->getUniqReference(),
                         '{id_order}' => $order->id,
                         '{date}' => Tools::displayDate(date('Y-m-d H:i:s'), true),
-                        '{carrier}' => ($virtual_product || !isset($carrier->name)) ? $this->trans('No carrier', [], 'Admin.Payment.Notification') : $carrier->name,
+                        '{carrier}' => ($virtual_product || !isset($carrierNames)) ? $this->trans('No carrier', [], 'Admin.Payment.Notification') : $carrierNames,
                         '{payment}' => $order->payment,
                         '{products}' => $product_list_html,
                         '{products_txt}' => $product_list_txt,
@@ -868,6 +997,42 @@ abstract class PaymentModuleCore extends Module
     }
 
     /**
+     * @param array<string, mixed> $customizationText
+     */
+    private function formatCustomizationValueForEmail(array $customizationText): string
+    {
+        static $moduleNames = [];
+        static $moduleManager = null;
+
+        if (!empty($customizationText['id_module'])) {
+            $moduleId = (int) $customizationText['id_module'];
+
+            if (!array_key_exists($moduleId, $moduleNames)) {
+                $module = Module::getInstanceById($moduleId);
+
+                if (false === $module) {
+                    $moduleNames[$moduleId] = null;
+                } else {
+                    $moduleNames[$moduleId] = $module->name;
+                }
+            }
+
+            if (!empty($moduleNames[$moduleId])) {
+                if (null === $moduleManager) {
+                    $moduleManager = ModuleManagerBuilder::getInstance()->build();
+                }
+
+                if ($moduleManager->isEnabled($moduleNames[$moduleId])) {
+                    // Allow module-provided HTML in emails only after sanitizing to prevent XSS.
+                    return Tools::purifyHTML((string) $customizationText['value']);
+                }
+            }
+        }
+
+        return htmlspecialchars((string) $customizationText['value'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    /**
      * Allows specified payment modules to be used by a specific currency.
      *
      * @param int $id_currency
@@ -945,6 +1110,17 @@ abstract class PaymentModuleCore extends Module
         }
 
         return $this->partialRenderer;
+    }
+
+    private function getOrderCreationLock(): OrderCreationLock
+    {
+        if ($this->orderCreationLock === null) {
+            /** @var OrderCreationLock $orderCreationLock */
+            $orderCreationLock = $this->get(OrderCreationLock::class);
+            $this->orderCreationLock = $orderCreationLock;
+        }
+
+        return $this->orderCreationLock;
     }
 
     /**
@@ -1065,37 +1241,22 @@ abstract class PaymentModuleCore extends Module
         );
         $order->total_discounts = $order->total_discounts_tax_incl;
 
-        $order->total_shipping_tax_incl = Tools::ps_round(
-            (float) abs($cart->getOrderTotal(true, Cart::ONLY_SHIPPING, $order->product_list, null)),
-            $computingPrecision
-        );
-
-        $order->total_shipping_tax_excl = Tools::ps_round(
-            (float) abs($cart->getOrderTotal(false, Cart::ONLY_SHIPPING, $order->product_list, null)),
-            $computingPrecision
-        );
-
-        // loop for each carrier to store the shipping cost
-        if ($this->isFeatureFlagIsEnabledForMultiShipment()) {
-            foreach ($productList as $carrierId => $product) {
-                $totalShippingTaxExcl = Tools::ps_round(
-                    (float) abs($cart->getOrderTotal(false, Cart::ONLY_SHIPPING, $order->product_list, $carrierId)),
-                    $computingPrecision
-                );
-                $totalShippingTaxIncl = Tools::ps_round(
-                    (float) abs($cart->getOrderTotal(true, Cart::ONLY_SHIPPING, $order->product_list, $carrierId)),
-                    $computingPrecision
-                );
-
-                $productList[$carrierId]['total_shipping_tax_excl'] = $totalShippingTaxExcl;
-                $productList[$carrierId]['total_shipping_tax_incl'] = $totalShippingTaxIncl;
-            }
-        }
-
-        $order->total_shipping = $order->total_shipping_tax_incl;
-
         if (null !== $carrier && Validate::isLoadedObject($carrier)) {
             $order->carrier_tax_rate = $carrier->getTaxesRate(new Address((int) $cart->{Configuration::get('PS_TAX_ADDRESS_TYPE')}));
+        }
+
+        if (!$this->isFeatureFlagIsEnabledForMultiShipment()) {
+            $order->total_shipping_tax_incl = Tools::ps_round(
+                (float) abs($cart->getOrderTotal(true, Cart::ONLY_SHIPPING, $order->product_list, null)),
+                $computingPrecision
+            );
+
+            $order->total_shipping_tax_excl = Tools::ps_round(
+                (float) abs($cart->getOrderTotal(false, Cart::ONLY_SHIPPING, $order->product_list, null)),
+                $computingPrecision
+            );
+
+            $order->total_shipping = $order->total_shipping_tax_incl;
         }
 
         $order->total_wrapping_tax_excl = Tools::ps_round(
@@ -1176,6 +1337,10 @@ abstract class PaymentModuleCore extends Module
 
         if ($this->isFeatureFlagIsEnabledForMultiShipment()) {
             $this->addShipmentToOrder($order, $productList);
+
+            /** @var ShipmentShippingCostUpdater $shipmentShippingCostUpdater */
+            $shipmentShippingCostUpdater = $this->get(ShipmentShippingCostUpdater::class);
+            $order = $shipmentShippingCostUpdater->recalculateForOrder((int) $order->id);
         }
 
         return ['order' => $order, 'orderDetail' => $order_detail];
@@ -1309,13 +1474,11 @@ abstract class PaymentModuleCore extends Module
             if ($id_order_state != Configuration::get('PS_OS_ERROR') && $id_order_state != Configuration::get('PS_OS_CANCELED') && !in_array($cartRule->id, $cart_rule_used)) {
                 $cart_rule_used[] = $cartRule->id;
 
-                // Create a new instance of Cart Rule without id_lang, in order to update its quantity
-                $cart_rule_to_update = new CartRule((int) $cartRule->id);
-                // if the cart rule isn't in nolimit mode, we decrease the quantity available
-                if ($cart_rule_to_update->quantity !== null) {
-                    $cart_rule_to_update->quantity = max(0, $cart_rule_to_update->quantity - 1);
+                // validateOrder() takes the quantity when it checks the cart rule, it is taken here
+                // only for an order validated without it
+                if (!isset($this->reservedCartRules[(int) $cartRule->id]) && $cartRule->quantity !== null) {
+                    $this->getCartRuleQuantityReserver()->reserve((int) $cartRule->id);
                 }
-                $cart_rule_to_update->update();
             }
 
             $cart_rules_list[] = [
@@ -1330,14 +1493,39 @@ abstract class PaymentModuleCore extends Module
         return $cart_rules_list;
     }
 
+    /**
+     * Gives back the quantity taken for the cart rules that no order of the current validateOrder() call kept
+     * (order in error or canceled, cart rule not applicable to the orders, validation stopped to withdraw a cart rule,
+     * or validation interrupted by an exception). The cart rules kept are read from the saved order cart rules,
+     * so that it does not depend on the code that saved them.
+     */
+    private function releaseUnusedCartRuleQuantities(): void
+    {
+        if (!empty($this->reservedCartRules)) {
+            $cartRuleQuantityReserver = $this->getCartRuleQuantityReserver();
+            $keptCartRuleIds = $cartRuleQuantityReserver->getCartRuleIdsKeptByOrders($this->orderIdsUsingCartRuleQuantities);
+            foreach (array_keys($this->reservedCartRules) as $cartRuleId) {
+                if (!in_array($cartRuleId, $keptCartRuleIds, true)) {
+                    $cartRuleQuantityReserver->release($cartRuleId);
+                }
+            }
+        }
+        $this->reservedCartRules = [];
+        $this->orderIdsUsingCartRuleQuantities = [];
+    }
+
+    private function getCartRuleQuantityReserver(): CartRuleQuantityReserver
+    {
+        /** @var CartRuleQuantityReserver $cartRuleQuantityReserver */
+        $cartRuleQuantityReserver = $this->get(CartRuleQuantityReserver::class);
+
+        return $cartRuleQuantityReserver;
+    }
+
     private function addShipmentToOrder(Order $order, array $productsByCarrier)
     {
-        if (!$this->isFeatureFlagIsEnabledForMultiShipment()) {
-            return;
-        }
-
         /** @var OrderShipmentCreator $orderShipmentCreator */
-        $orderShipmentCreator = $this->get('PrestaShop\PrestaShop\Adapter\Shipment\OrderShipmentCreator');
+        $orderShipmentCreator = $this->get(OrderShipmentCreator::class);
         $physicalProductsByCarrier = [];
 
         foreach ($productsByCarrier as $carrierId => $products) {
@@ -1347,8 +1535,6 @@ abstract class PaymentModuleCore extends Module
 
             if (!empty($filteredProducts)) {
                 $physicalProductsByCarrier[$carrierId]['product_list'] = array_values($filteredProducts);
-                $physicalProductsByCarrier[$carrierId]['total_shipping_tax_excl'] = $products['total_shipping_tax_excl'];
-                $physicalProductsByCarrier[$carrierId]['total_shipping_tax_incl'] = $products['total_shipping_tax_incl'];
             }
         }
         $orderShipmentCreator->addShipmentOrder($order, $physicalProductsByCarrier);
