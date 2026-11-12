@@ -28,18 +28,32 @@ merge into the file before publishing.
 | `meta/goal` | `goal`, `principles[]`, `updatedAt`, `updatedBy` — **owned by the user**; change only on their word |
 | `items/<id>` | `section`, `order`, `status` (todo\|doing\|blocked\|done\|skip), `title`, `detail`, `note`, `updatedAt`, `updatedBy`; workflow fields `phase` (analyzing\|choose\|planned\|working\|done), `chosenPath`, `stopRule`; queue fields `queue` (now\|next\|later\|null), `queueOrder` (10, 20, …) |
 | `analyses/<itemId>` | `request`, `goalCheck{verdict,reasoning,reframedGoal}`, `summary`, `paths[]{key,title,origin,approach,strengths[],weaknesses[],effort,risk,fitsGoal,flow,usable,rejectReason,recommended}`, `recommendation`, `planFlow`, `createdAt` — `flow`/`planFlow` are Mermaid text the page draws |
-| `questions/<id>` | `itemId` (null = global), `text`, `why`, `blocking`, `answer`, `status` (open\|answered), `createdAt`, `answeredAt` |
+| `questions/<id>` | `itemId` (null = global), `alsoItems[]` (other items it applies to — never duplicate a question), `text`, `why`, `blocking`, `answer`, `status` (open\|answered — the page treats anything not `answered` as open), `resolution` (user\|default\|research\|done\|obsolete\|superseded), `resolvedBy` (step id / `repo:sha` / item id), `supersededBy` (question id), `dependsOn` (question id), `createdAt`, `answeredAt` |
 | `steps/<id>` | `itemId`, `order` (10, 20, …), `title`, `detail`, `status` (todo\|doing\|done\|skip), `checkpoint` (stop after this step), `commit` (`repo:sha` — the part before `:` groups the Unpushed lane), `pushed` (true once shipped), `verified`, `note` |
 
 Item ids are kebab-case with a section prefix (`checkout-packeta-test`). Question/step ids: `<itemId>-q1`, `<itemId>-s10`.
 Use `batch` for multi-doc writes, `update` with `if_version` for single-field changes; timestamps ISO.
 
+## Board dump
+
+The board is the **single source of truth** for what is planned, decided, done and asked. Memory only says how
+the board works — never copy board state into memory. Before an analysis, a "next step", or answering "what's
+open", dump it fresh (subagents can't read the board themselves):
+
+```
+ArtifactData list  collection=<c>  query={"limit":1000}  out_dir=<scratchpad>/board   for c in items, questions, analyses, steps
+ArtifactData get   meta/goal
+```
+
+Pass `<scratchpad>/board` to the analyzer. Re-dump after the user may have edited the page (answers, choices).
+
 ## Lifecycle
 
-1. **Intake** — read `meta/goal`, find the matching item (`query` items by title/section) or plan a new one.
-   Set `phase: analyzing`.
-2. **Analyze** — run the `analyzer` agent with the verbatim request, the goal doc, the item and its open questions.
+1. **Intake** — dump the board, read `meta/goal`, find the matching item (grep the dump by title/detail/note) or
+   plan a new one. Set `phase: analyzing`.
+2. **Analyze** — run the `analyzer` agent with the verbatim request, the goal, the item id and the dump path.
    Write `analyses/<itemId>` + `questions/*` (+ the new item if `newItem`) in one batch, set `phase: choose`.
+   Apply its `boardFindings` (stale/duplicate/drifted docs) in the same batch when obvious; mention the rest.
 3. **Present** — goal check verdict first. ≤ 5 usable paths: all in chat (strengths/weaknesses as bullets).
    > 5: goal check + top 3 + "N more usable, M rejected — full list on the board: <URL>". List blocking questions.
    **Stop.** The user chooses (in chat or with "Choose this path" on the board).
@@ -51,8 +65,22 @@ Use `batch` for multi-doc writes, `update` with `if_version` for single-field ch
    Take the lowest-order `todo` step, set `doing` (item `phase: working`, `status: doing`), run the WORKFLOW loop
    for it (implement → verify → review → commit locally), then set `done` with `commit` (repo:sha) and `verified`
    (what was actually checked). Continue to the next step unless this one is a `checkpoint` → report and stop.
+   **Write-back after every step:** any question (on any item) the step settled or made moot → `answered` with
+   `resolution` + `resolvedBy`; other items it fixed or changed → update their `status`/`note` (link the step).
 6. **Finish** — all steps done/skip → item `status: done`, `phase: done`, a short `note` with the outcome and what's
-   queued for the next push.
+   queued for the next push. **Close-out:** an item can't be done while it has open questions — answer, move
+   (`alsoItems`/new item) or close each with a `resolution`.
+
+### Keeping the board true
+
+- **Chat answers** are written to the question doc in the same turn (`resolution: user`).
+- **Answers that need action** ("yes, switch the branch") become a step or item immediately — an answer alone
+  changes nothing.
+- **Every commit maps to a step.** Work outside a planned step gets an ad-hoc step on the item it serves (or a new
+  item), with `commit` — otherwise the Unpushed lane misses it.
+- **Reversed decisions** update the old answer (`resolution: superseded`, note why) and the item's `chosenPath`.
+- **Never ask what the board already answers** — grep the dump (answered questions, notes, steps) first; if it's
+  researchable, research it; if a default is sensible, take it as `resolution: default` and say so.
 
 ### Queue (Now / Next / Later)
 
@@ -63,5 +91,5 @@ The page's Queue view shows lanes Now (WIP limit 3), Next, Later and Unpushed. K
 - After a push the user confirms (`adwear-ship-plan`), set `pushed: true` on every step whose commit shipped.
 - The user's own lane/order changes on the page win; never reshuffle them.
 
-New questions that come up mid-work go on the board immediately (blocking ones stop the step).
-Answers given in chat get written back to the question doc (`answer`, `status: answered`, `answeredAt`).
+New questions that come up mid-work go on the board immediately (blocking ones stop the step), after the same
+triage as the analyzer's (`adwear-analyze` step 6).

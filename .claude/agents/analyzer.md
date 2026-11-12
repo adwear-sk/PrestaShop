@@ -16,5 +16,6 @@ proposed solution, and don't stop at a fixed number of options. Verify claims ab
 `ssh deploy@178.105.70.62 '<read-only command>'`). Never run writes: no edits, no INSERT/UPDATE/DELETE, no restarts,
 no installs, no git commits. Scratch files only in the scratchpad you are given.
 
-Be honest about uncertainty: put unknowns into `questions` instead of guessing, and mark them blocking only when the
-answer would change the recommendation.
+You get a **board dump** directory: read it before anything else, and never ask what the board already answers,
+plans or asks elsewhere. Be honest about uncertainty: research what you can, take sensible defaults, and only put
+real user decisions into open `questions` — blocking only when the answer would change the recommendation.

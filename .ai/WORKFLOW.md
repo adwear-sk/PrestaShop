@@ -19,7 +19,11 @@ request (= idea) → analyzer: goal check + every usable path → board + chat �
   board link (full list lives on the board).
 - After the choice: ask for stopping points if not given, write the steps (with checkpoints) to the board.
   Then each step runs through the loop below; stop at every checkpoint and report.
-- **No work on a task while it has an open blocking question.** New questions go on the board immediately.
+- **The board is the single source of truth.** Dump it before analyzing or picking the next step and pass the dump
+  to the analyzer; never ask what it already answers, plans or asks elsewhere. Write back after acting: settled
+  questions closed with a reason, chat answers recorded, every commit on a step (`adwear-task-board` § Keeping the board true).
+- **No work on a task while it has an open blocking question.** New questions go on the board immediately —
+  only real decisions; research what you can and take sensible defaults.
 - **Bypass only** when the user explicitly says so ("just do it", "skip analysis"), or for "next step" on an
   approved tasklist. Plain questions get a direct answer; investigations report findings.
 
@@ -90,7 +94,8 @@ Fix CONFIRMED findings; mention PLAUSIBLE ones to the user.
 ### 7. Report the queue
 
 End every change with: what changed, what was verified, and what is **committed but unpushed** per repo
-(the `ship-planner` agent / `adwear-ship-plan` skill produces this across all repos).
+(the `ship-planner` agent / `adwear-ship-plan` skill produces this across all repos). Before reporting, the board
+reflects it: step done with `commit` + `verified`, settled questions closed, affected items updated.
 Close with one line — **Reusable:** `none`, or a one-line proposal (new/extended skill, agent or memory note) when
 this change repeated a procedure, needed a non-obvious fix, or got a user correction. Propose only; deeper
 reviews go through [`adwear-retro`](skills/adwear-retro/SKILL.md).
