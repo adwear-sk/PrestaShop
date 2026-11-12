@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"Adwear workflow: treat this request as an idea, not a direction. New change request -> analyzer first (WORKFLOW §0: goal check + all alternatives) unless the user said just do it / skip analysis or it is the next approved step. Check the task board for open blocking questions.\"}}'"
+            "command": "printf '%s' '{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"Adwear workflow: treat this request as an idea, not a direction. New change request -> analyzer first (WORKFLOW §0: goal check + all alternatives) unless the user said just do it / skip analysis or it is the next approved step. The task board is the source of truth: dump it first and pass the dump to the analyzer; never ask what it already answers or plans; write chat answers back, close settled questions, put every commit on a step.\"}}'"
           }
         ]
       }
