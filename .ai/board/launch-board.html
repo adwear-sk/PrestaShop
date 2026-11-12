@@ -211,6 +211,21 @@ details.answered > summary { cursor: pointer; font-size: 14px; color: var(--mute
 .qa .answer { padding: 6px 10px; border-radius: 6px; background: var(--hover); white-space: pre-wrap; overflow-wrap: anywhere; }
 .qa small { color: var(--muted); font-size: 12px; }
 
+/* Answer options */
+.opts { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.opt { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; min-width: 0; }
+.opt:hover { border-color: var(--accent); }
+.opt[data-checked] { border-color: var(--accent); background: var(--accent-soft); }
+.opt input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--accent); cursor: pointer; }
+.opt:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.opt .ol { display: grid; gap: 2px; min-width: 0; }
+.opt .ol-top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.opt strong { font-size: 14px; overflow-wrap: anywhere; }
+.opt small { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.qa .own { color: var(--muted); }
+details.others summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+details.others ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 2px; }
+
 /* Checklist */
 .cl-tools { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; }
 .cl-tools .search { flex: 1 1 220px; min-width: 0; width: auto; }
@@ -580,7 +595,8 @@ let editingGoal = false;
 let adding = null;             // area key with the add form open
 let pendingDelete = null;
 const openPaths = new Set();
-const drafts = {};             // question id -> unsent answer text
+const drafts = {};             // question id -> unsent answer / comment text
+const picks = {};              // question id -> picked option key ("custom" = Something else)
 const flowOpen = new Map();    // flow key -> open/closed, when the viewer toggled it
 const flowCache = {};          // mermaid source -> { svg } or { error }
 let flowSeq = 0;
@@ -1022,41 +1038,112 @@ function renderInbox() {
   const answered = questions.filter(q => q.status === "answered").sort((a, b) => String(b.answeredAt || "").localeCompare(String(a.answeredAt || ""))).slice(0, 10);
   if (answered.length) {
     box.append(el("details", { class: "answered panel" }, el("summary", { text: `Recently answered (${answered.length})` }),
-      el("div", {}, answered.map(q => {
-        const it = q.itemId ? items.find(i => i.id === q.itemId) : null;
-        return el("div", { class: "qa" }, el("strong", { text: q.text }),
-          q.resolution ? el("span", {}, el("span", { class: "res", text: resolutionText(q) })) : null,
-          q.answer ? el("div", { class: "answer", text: q.answer }) : null,
-          el("small", {}, it ? itemLink(it) : "Whole launch", q.answeredAt ? " · " + fmtDate(q.answeredAt) : ""), alsoLinks(q));
-      }))));
+      el("div", {}, answered.map(q => renderAnswered(q, true)))));
   }
   return box;
 }
 
+const CUSTOM = "custom";
+const optionsOf = q => Array.isArray(q.options) ? q.options.filter(o => o && o.key !== undefined && o.key !== null) : [];
+// Save is allowed with a picked option (comment optional) or with own text ("Something else" needs text).
+function canSave(q) {
+  const pick = picks[q.id] || "";
+  const text = (drafts[q.id] || "").trim();
+  if (pick && pick !== CUSTOM) return true;
+  return !!text;
+}
+
 function renderQuestionCard(q, ctx) {
   const card = el("div", { class: "ask", id: ctx === "in" ? "inq-" + q.id : null, "data-blocking": String(!!q.blocking) });
+  const qtId = "qt-" + q.id + "-" + ctx;
   card.append(el("div", { class: "ask-top" },
     q.blocking ? el("span", { class: "badge b-ask", text: "Stops work" }) : null,
-    el("p", { class: "q", text: q.text })));
+    el("p", { class: "q", id: qtId, text: q.text })));
   if (q.why) card.append(el("p", { class: "why", text: "Decides: " + q.why }));
   const also = alsoLinks(q);
   if (also) card.append(also);
-  if (canWrite) {
-    const ta = el("textarea", { id: "ans-" + q.id + "-" + ctx, "aria-label": "Your answer to: " + q.text, placeholder: "Your answer" });
-    ta.value = drafts[q.id] || "";
-    ta.addEventListener("input", () => { drafts[q.id] = ta.value; });
-    card.append(ta, el("div", { class: "row-btns" },
-      el("button", { class: "btn primary", type: "button", text: "Save answer", onclick: () => answer(q, ta.value) })));
+  if (!canWrite) return card;
+
+  const opts = optionsOf(q);
+  const base = q.id + "-" + ctx;
+  const ta = el("textarea", { id: "ans-" + base, "aria-label": opts.length ? "Comment or your own answer to: " + q.text : "Your answer to: " + q.text,
+    placeholder: opts.length ? "Add a comment or write your own answer" : "Your answer" });
+  ta.value = drafts[q.id] || "";
+  const save = el("button", { class: "btn primary", type: "button", id: "save-" + base, text: "Save answer", onclick: () => answer(q) });
+  const req = el("p", { class: "hint", id: "req-" + base });
+  const labels = [];
+  const sync = () => {
+    const pick = picks[q.id] || "";
+    save.disabled = !canSave(q);
+    ta.required = pick === CUSTOM;
+    if (opts.length) {
+      req.textContent = pick === CUSTOM ? "Write your answer above to save it." : pick ? "Comment is optional." : "Pick an option or write your own answer.";
+      ta.placeholder = pick === CUSTOM ? "Write your own answer (required)" : "Add a comment or write your own answer";
+    }
+    labels.forEach(l => l.toggleAttribute("data-checked", l.querySelector("input").checked));
+  };
+  ta.addEventListener("input", () => { drafts[q.id] = ta.value; sync(); });
+
+  if (opts.length) {
+    const fs = el("fieldset", { class: "opts" }, el("legend", { class: "sr-only", text: q.text }));
+    const mk = (key, label, detail, recommended) => {
+      const rid = "o-" + base + "-" + String(key).replace(/[^a-z0-9_-]/gi, "-");
+      const input = el("input", { type: "radio", name: "opt-" + base, id: rid, value: String(key), checked: (picks[q.id] || "") === String(key) });
+      input.addEventListener("change", () => { if (input.checked) { picks[q.id] = String(key); sync(); } });
+      const lab = el("label", { class: "opt", for: rid }, input,
+        el("span", { class: "ol" },
+          el("span", { class: "ol-top" }, el("strong", { text: label }), recommended ? el("span", { class: "badge b-rec", text: "Recommended" }) : null),
+          detail ? el("small", { text: detail }) : null));
+      labels.push(lab);
+      return lab;
+    };
+    opts.forEach(o => fs.append(mk(o.key, o.label || String(o.key), o.detail, !!o.recommended)));
+    fs.append(mk(CUSTOM, "Something else", "Write your own answer below.", false));
+    card.append(fs);
   }
+  card.append(ta, el("div", { class: "row-btns" }, save, opts.length ? req : null));
+  sync();
   return card;
 }
 
-async function answer(q, text) {
-  const a = text.trim();
-  if (!a) return;
+async function answer(q) {
+  if (!canSave(q)) return;
+  const opts = optionsOf(q);
+  const pick = picks[q.id] || "";
+  const note = (drafts[q.id] || "").trim();
+  let body;
+  const o = pick && pick !== CUSTOM ? opts.find(x => String(x.key) === pick) : null;
+  if (o) body = { answer: (o.label || String(o.key)) + (note ? " — " + note : ""), answerOption: o.key, answerNote: note || null };
+  else body = { answer: note, answerOption: CUSTOM, answerNote: null };
   delete drafts[q.id];
-  try { await db.collection("questions").doc(q.id).update({ answer: a, status: "answered", answeredAt: now(), answeredBy: myId }); }
+  delete picks[q.id];
+  try { await db.collection("questions").doc(q.id).update({ ...body, status: "answered", resolution: "user", answeredAt: now(), answeredBy: myId }); }
   catch (e) { showError(e); }
+}
+
+// An answered question: the chosen option (and note) or the free answer, the resolution, and the options not taken.
+function renderAnswered(q, withContext) {
+  const opts = optionsOf(q);
+  const chosen = q.answerOption !== undefined && q.answerOption !== null && q.answerOption !== CUSTOM ? opts.find(o => String(o.key) === String(q.answerOption)) : null;
+  const box = el("div", { class: "qa" }, el("strong", { text: q.text }),
+    q.resolution ? el("span", {}, el("span", { class: "res", text: resolutionText(q) })) : null);
+  if (chosen) {
+    box.append(el("div", { class: "answer" }, el("strong", { text: chosen.label || String(chosen.key) }), q.answerNote ? el("div", { text: q.answerNote }) : null));
+  } else if (q.answer) {
+    box.append(el("div", { class: "answer" }, q.answerOption === CUSTOM && opts.length ? el("small", { class: "own", text: "Own answer: " }) : null, q.answer));
+  }
+  if (q.answerOption !== undefined && q.answerOption !== null && opts.length) {
+    const others = opts.filter(o => o !== chosen);
+    if (others.length) box.append(el("details", { class: "others" }, el("summary", { text: `Other options were… (${others.length})` }),
+      el("ul", {}, others.map(o => el("li", {}, o.label || String(o.key), o.detail ? el("small", { text: " · " + o.detail }) : null)))));
+  }
+  if (withContext) {
+    const it = q.itemId ? items.find(i => i.id === q.itemId) : null;
+    box.append(el("small", {}, it ? itemLink(it) : "Whole launch", q.answeredAt ? " · " + fmtDate(q.answeredAt) : ""));
+  }
+  const also = alsoLinks(q);
+  if (also) box.append(also);
+  return box;
 }
 
 /* ---------- Checklist ---------- */
@@ -1412,8 +1499,7 @@ function renderTask(it) {
   if (qs.length) {
     out.push(el("section", {}, el("h3", { text: "Questions" }), el("ul", { class: "qs" }, qs.map(q => el("li", {},
       q.status === "answered"
-        ? el("div", { class: "qa" }, el("strong", { text: q.text }), q.resolution ? el("span", {}, el("span", { class: "res", text: resolutionText(q) })) : null,
-            q.answer ? el("div", { class: "answer", text: q.answer }) : null, alsoLinks(q))
+        ? renderAnswered(q, false)
         : renderQuestionCard(q, "d"))))));
   }
 
@@ -1734,8 +1820,8 @@ function paint() {
     if (card) {
       const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
       card.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
-      const ta = card.querySelector("textarea");
-      if (ta) ta.focus({ preventScroll: true });
+      const first = card.querySelector('input[type="radio"], textarea');
+      if (first) first.focus({ preventScroll: true });
     }
   }
 }

@@ -29,7 +29,7 @@ merge into the file before publishing.
 | `meta/schema` | `kinds[]`, `tags[]` (`{v, label, hint}`) — the only allowed values for item `kind` / `tags`; add a value here before using it |
 | `items/<id>` | `section`, `order`, `status` (todo\|doing\|blocked\|done\|skip), `title`, `detail`, `note`, `updatedAt`, `updatedBy`; `kind` (build\|fix\|check\|decide\|routine), `tags[]`, `dependsOn[]` (item ids — never store the reverse); workflow fields `phase` (analyzing\|choose\|planned\|working\|done), `chosenPath`, `stopRule`; queue fields `queue` (now\|next\|later\|null), `queueOrder` (10, 20, …); `duplicateOf` (item/step id) |
 | `analyses/<itemId>` | `request`, `goalCheck{verdict,reasoning,reframedGoal}`, `summary`, `paths[]{key,title,origin,approach,strengths[],weaknesses[],effort,risk,fitsGoal,flow,usable,rejectReason,recommended}`, `recommendation`, `planFlow`, `createdAt` — `flow`/`planFlow` are Mermaid text the page draws |
-| `questions/<id>` | `itemId` (null = global), `alsoItems[]` (other items it applies to — never duplicate a question), `text`, `why`, `blocking`, `answer`, `status` (open\|answered — the page treats anything not `answered` as open), `resolution` (user\|default\|research\|done\|obsolete\|superseded), `resolvedBy` (step id / `repo:sha` / item id), `supersededBy` (question id), `dependsOn` (question id), `createdAt`, `answeredAt` |
+| `questions/<id>` | `itemId` (null = global), `alsoItems[]` (other items it applies to — never duplicate a question), `text`, `why`, `blocking`, `answer`, `status` (open\|answered — the page treats anything not `answered` as open), `resolution` (user\|default\|research\|done\|obsolete\|superseded), `resolvedBy` (step id / `repo:sha` / item id), `supersededBy` (question id), `dependsOn` (question id), `options[]` (`{key, label, detail, recommended}` — the page shows them as choices plus "Something else" with free text), `answerOption` (chosen key or `custom`), `answerNote`, `createdAt`, `answeredAt` |
 | `steps/<id>` | `itemId`, `order` (10, 20, …), `title`, `detail`, `status` (todo\|doing\|done\|skip), `checkpoint` (stop after this step), `commit` (`repo:sha` — the part before `:` groups the Unpushed lane), `pushed` (true once shipped), `verified`, `note` |
 
 Item ids are kebab-case with a section prefix (`checkout-packeta-test`). Question/step ids: `<itemId>-q1`, `<itemId>-s10`.
@@ -86,7 +86,10 @@ content = seo+marketing; others map 1:1.
 
 ### Keeping the board true
 
-- **Chat answers** are written to the question doc in the same turn (`resolution: user`).
+- **Chat answers** are written to the question doc in the same turn (`resolution: user`, `answerOption` when it
+  matches an option, else `custom`).
+- **Asking in chat** uses the same options (AskUserQuestion with the question's `options`; free text is always
+  possible there too), so chat and board offer the same choices.
 - **Answers that need action** ("yes, switch the branch") become a step or item immediately — an answer alone
   changes nothing.
 - **Every commit maps to a step.** Work outside a planned step gets an ad-hoc step on the item it serves (or a new

@@ -55,6 +55,9 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
    - **Only real decisions stay open** — money, legal, risk appetite, taste, scope, priorities.
    `blocking: true` only when the answer would change which path is best or whether to do it at all. Each has
    `why` (what it decides); a question that becomes moot once another is answered names it in `dependsOn`.
+   **Every open question carries `options`** (2–5 concrete answers, each `{key, label, detail, recommended}`;
+   mark at most one `recommended`). The page always adds "Something else" with free text, so never add an
+   "Other" option yourself. A truly open-ended question (a name, a number) may have no options — rare.
 
 ## Output (return exactly this, then a ≤ 10-line human summary)
 
@@ -72,7 +75,8 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
                "fitsGoal": "…", "flow": "flowchart TD\n  A[\"…\"] --> B[\"…\"]", "usable": true, "rejectReason": null, "recommended": false}],
     "recommendation": "…"
   },
-  "questions": [{"text": "…", "why": "…", "blocking": true}],
+  "questions": [{"text": "…", "why": "…", "blocking": true,
+                 "options": [{"key": "a", "label": "…", "detail": "…", "recommended": true}]}],
   "boardFindings": [{"doc": "questions/<id> | items/<id>", "finding": "stale|duplicate|settled by …|drifted", "fix": "…"}]
 }
 ```
