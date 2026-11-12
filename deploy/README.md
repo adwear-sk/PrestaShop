@@ -29,7 +29,8 @@ A push-to-deploy setup for a single PrestaShop store on a Hetzner VPS.
 | `php-prod.ini` | Production PHP/OPcache tuning |
 | `.env.prod.example` | Template for the server's secrets file |
 | `provision.sh` | One-time VPS hardening + Docker install |
-| `backup.sh` | Nightly DB dump (cron) |
+| `backup.sh` | Nightly verified DB dump + encrypted off-site borg backup of DB, volumes and `/opt/adwear` (cron 03:15) |
+| `borgmatic/config.yaml` | What the off-site backup holds, retention 7d/4w/6m, checks |
 
 ---
 
@@ -120,12 +121,39 @@ Visit https://www.adwear.sk — Caddy issues the TLS cert on first request.
 Then deploy the custom modules + theme by pushing their repos.
 
 ### 10. Nightly backups
+The deploy ships `backup.sh` and `borgmatic/config.yaml`, and installs the 03:15 cron from `crontab`.
+`backup.sh` dumps and verifies the DB, keeps 14 days of dumps on the box, and sends the dump, the
+`ps-img/-upload/-download/-config/-mails` volumes and `/opt/adwear` to an encrypted borg repo on a
+Hetzner Storage Box (another location than the VPS, with automatic snapshots on). It runs borg
+from the pinned `b3vis/borgmatic` image, so the VPS needs no borg and no root.
+
+The **only** protection against a compromised VPS is the Storage Box's automatic snapshots: the
+VPS key can prune and delete the repo, and only the Hetzner console can delete snapshots. Keep them on.
+
+One-time setup, as `deploy`, after the deploy has shipped `borgmatic/config.yaml`:
 ```bash
-cp deploy/backup.sh /opt/adwear/ && chmod +x /opt/adwear/backup.sh
-crontab -e
-# add:
-15 3 * * *  /opt/adwear/backup.sh >> /opt/adwear/backups/backup.log 2>&1
+cd /opt/adwear
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/storagebox
+ssh-copy-id -p 23 -s -i ~/.ssh/storagebox.pub uNNN@uNNN.your-storagebox.de
+ssh-keyscan -p 23 uNNN.your-storagebox.de > ~/.ssh/storagebox_known_hosts
+ssh -p 23 -i ~/.ssh/storagebox uNNN@uNNN.your-storagebox.de borg --version   # expect 1.4.x
+# .env: BORG_REPO=ssh://uNNN@uNNN.your-storagebox.de:23/./adwear
+#       BORG_PASSPHRASE=$(openssl rand -hex 32)   (hex: no quotes or $ to trip up sourcing)
+#       HC_BACKUP_URL=https://hc-ping.com/<uuid>  (grace: several hours, the first seed is long)
+#       ALERT_URL=https://ntfy.sh/<topic>
+set -a; . ./.env; set +a
+borg() { docker run --rm -e BORG_REPO -e BORG_PASSPHRASE -e BORG_HOST_ID=adwear-backup \
+  --mount type=bind,src=$PWD/borgmatic/config.yaml,dst=/etc/borgmatic/config.yaml,readonly \
+  --mount type=bind,src=$HOME/.ssh/storagebox,dst=/root/.ssh/storagebox,readonly \
+  --mount type=bind,src=$HOME/.ssh/storagebox_known_hosts,dst=/root/.ssh/known_hosts,readonly \
+  -v adwear-borg-config:/root/.config/borg --entrypoint borgmatic b3vis/borgmatic:2.1.10 \
+  -c /etc/borgmatic/config.yaml "$@"; }
+borg repo-create --encryption repokey-blake2
+borg key export          # paste the output into Bitwarden
 ```
+Store the passphrase **and** the key export in Bitwarden: the repo can't be read with only one of
+them. Until `BORG_REPO` is set, `backup.sh` makes the local dump only and reports the missing
+off-site copy to healthchecks.
 
 ---
 

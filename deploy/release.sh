@@ -127,9 +127,9 @@ docker compose exec -T -u www-data app php -r "require '/var/www/html/config/con
 # ps_layered_filter_block cache. Core's default rules block ?q= and
 # &q=. Non-fatal: the crontab step below must still run.
 docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; exit(Tools::generateRobotsFile(true) ? 0 : 1);" || echo "WARNING: robots.txt generation failed"
-# scp does not preserve the exec bit, and the 03:45/03:47 crons
-# call these scripts directly.
-chmod +x /opt/adwear/prune-logs.sh /opt/adwear/prune-visitors.sh /opt/adwear/healthcheck.sh
+# scp does not preserve the exec bit, and the crons call these
+# scripts directly.
+chmod +x /opt/adwear/prune-logs.sh /opt/adwear/prune-visitors.sh /opt/adwear/healthcheck.sh /opt/adwear/backup.sh
 # Install the git-managed cron schedule (deploy/crontab).
 crontab /opt/adwear/crontab
 

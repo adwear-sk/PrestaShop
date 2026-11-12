@@ -79,13 +79,13 @@ jobs:
         with:
           sparse-checkout: deploy
 
-      - name: Copy crontab, host scripts and SQL migrations to the VPS
+      - name: Copy crontab, host scripts, backup config and SQL migrations to the VPS
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "deploy/crontab,deploy/prune-logs.sh,deploy/prune-visitors.sh,deploy/healthcheck.sh,deploy/migrate.sh,deploy/release.sh,deploy/sql"
+          source: "deploy/crontab,deploy/prune-logs.sh,deploy/prune-visitors.sh,deploy/healthcheck.sh,deploy/backup.sh,deploy/borgmatic,deploy/migrate.sh,deploy/release.sh,deploy/sql"
           target: /opt/adwear/
           strip_components: 1
 
