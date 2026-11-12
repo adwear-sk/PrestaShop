@@ -59,7 +59,7 @@
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
 body.drawer-open { overflow: hidden; }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
-.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1600px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 a { color: var(--accent); }
 h1, h2, h3 { font-family: var(--font-body); font-weight: 600; text-wrap: balance; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -183,7 +183,8 @@ ol.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 /* Home */
 .home { display: grid; gap: 18px; align-items: start; }
 .home .col { display: grid; gap: 18px; min-width: 0; align-content: start; }
-@media (min-width: 900px) { .home { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } }
+@media (min-width: 900px) { .home { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1400px) { .home { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .goal { border-left: 4px solid var(--accent); }
 .goal-text { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .principles summary { cursor: pointer; font-size: 13px; color: var(--muted); }
@@ -234,6 +235,9 @@ table.cl { width: 100%; border-collapse: collapse; table-layout: fixed; font-siz
 .cl .c-steps { width: 64px; }
 .cl .c-blk { width: 92px; }
 .cl .c-upd { width: 112px; }
+.cl .c-kind { width: 92px; }
+.cl .c-tags { width: 220px; }
+.cl .c-deps { width: 64px; }
 .cl td.c-steps, .cl td.c-upd { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .row-title { color: var(--ink); text-decoration: none; font-weight: 500; }
 .row-title:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
@@ -297,6 +301,44 @@ details.rejected li span { color: var(--muted); }
 .checkpoint { font: 600 11px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
 .checkpoint::before, .checkpoint::after { content: ""; flex: 1; border-top: 1px dashed var(--line); }
 
+@media (min-width: 1200px) { .drawer { width: min(760px, 50vw); } }
+.drawer-body p, .drawer-body .verdict, .drawer-body .note, .drawer-body .editor { max-width: 75ch; }
+.goal-text, .lane-hint, .grp-blurb, .ask .q, .ask .why { max-width: 75ch; }
+
+/* Kind, tags, dependencies */
+.kchip { font: 600 11px/1 var(--font-mono); letter-spacing: .03em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; white-space: nowrap; display: inline-block; }
+.tchip { font: 500 11px/1 var(--font-body); color: var(--ink); background: var(--todo-bg); border-radius: 999px; padding: 3px 8px; white-space: nowrap; display: inline-block; }
+.tchip[data-t="doomsday"], .tchip[data-t="security"] { color: var(--blocked); background: var(--blocked-bg); }
+.tchip[data-t="needs-owner"] { color: var(--ask); background: var(--ask-bg); }
+.tag-cell { display: flex; gap: 4px; overflow: hidden; }
+.b-wait { color: var(--doing); background: var(--doing-bg); }
+.b-ready { color: var(--accent); background: var(--accent-soft); }
+.deps-n { font: 600 12px/1 var(--font-mono); color: var(--doing); white-space: nowrap; }
+.sm-only { display: none; }
+.facets { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; width: 100%; }
+.facet { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.chip.sm { font-size: 12px; padding: 4px 8px; }
+.chip.view { border-style: dashed; }
+.chip.view[aria-pressed="true"] { border-style: solid; }
+.tag-toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+.dep-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dep-list li { display: flex; gap: 8px; align-items: baseline; font-size: 14px; min-width: 0; }
+.dep-list a { color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.dep-list li[data-met="true"] a, .dep-list li[data-met="true"] .mark { color: var(--muted); }
+.dep-list small { color: var(--muted); font-size: 12px; white-space: nowrap; flex: none; }
+.dep-list .icon-btn { width: 24px; height: 24px; font-size: 12px; margin-left: auto; }
+.dep-add { display: flex; gap: 6px; flex-wrap: wrap; }
+.dep-add input { flex: 1 1 240px; min-width: 0; font: inherit; font-size: 14px; padding: 6px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.warn { padding: 8px 12px; border-radius: 6px; background: var(--blocked-bg); color: var(--blocked); font-size: 14px; margin: 0; }
+.ready-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.ready-row:last-child { border-bottom: 0; }
+.ready-row .rt { display: grid; gap: 2px; min-width: 0; }
+.ready-row .rt a { color: var(--ink); text-decoration: none; font-size: 14px; overflow-wrap: anywhere; }
+.ready-row .rt a:hover { color: var(--accent); text-decoration: underline; }
+.ready-row .rt small { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12px; }
+.res { font: 600 11px/1 var(--font-body); color: var(--muted); background: var(--todo-bg); border-radius: 4px; padding: 3px 6px; }
+.also { font-size: 12px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; }
+
 /* Flow diagrams (Mermaid text from the analyzer/planner) */
 details.flow { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); min-width: 0; }
 details.flow > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); padding: 8px 10px; }
@@ -318,6 +360,7 @@ details.flow > summary { cursor: pointer; font-size: 13px; font-weight: 600; col
   .tab .n { font-size: 10px; padding: 2px 5px; }
   main { padding-bottom: calc(var(--tabbar-h) + 32px + env(safe-area-inset-bottom, 0px)); }
   .cl .hide-sm { display: none; }
+  .sm-only { display: inline; }
   .cl .c-status { width: 112px; }
   .cl .c-phase { width: 92px; }
   .cl th, .cl td { padding-left: 6px; padding-right: 6px; }
@@ -354,6 +397,7 @@ details.flow > summary { cursor: pointer; font-size: 13px; font-weight: 600; col
       <input class="search" id="search" type="search" placeholder="Search items…" aria-label="Search items">
       <div class="chips" id="chips" role="group" aria-label="Filter by status"></div>
       <div class="groupby-wrap"><span class="seg-label" id="groupby-l">Group by</span><div class="seg" id="groupby" role="group" aria-labelledby="groupby-l"></div></div>
+      <div class="facets" id="facets"></div>
     </div>
     <div id="view"><div class="notice"><strong>Loading the checklist…</strong></div></div>
   </main>
@@ -425,14 +469,42 @@ const VERDICTS = {
 const FILTERS = [
   { v: "all", label: "All" },
   { v: "open", label: "Open" },
+  { v: "ready", label: "Ready" },
   { v: "blocked", label: "Blocked" },
   { v: "done", label: "Done" },
 ];
 const GROUPS = [
   { v: "area", label: "Area" },
   { v: "status", label: "Status" },
+  { v: "kind", label: "Kind" },
   { v: "none", label: "None" },
 ];
+// Built-in copy of meta/schema, used until (or unless) the doc exists.
+const DEFAULT_SCHEMA = {
+  kinds: [
+    { v: "build", label: "Build", hint: "Make something new." },
+    { v: "fix", label: "Fix", hint: "Repair something broken." },
+    { v: "check", label: "Check", hint: "Verify or test; no change expected." },
+    { v: "decide", label: "Decide", hint: "A choice to make; work follows from it." },
+    { v: "routine", label: "Routine", hint: "Recurring upkeep." },
+  ],
+  tags: [
+    { v: "doomsday", label: "Doomsday", hint: "Would sink the launch if missed." },
+    { v: "security", label: "Security" },
+    { v: "money-path", label: "Money path", hint: "On the way from visit to paid order." },
+    { v: "needs-owner", label: "Needs you" },
+    { v: "external:lawyer", label: "Lawyer" },
+    { v: "external:accountant", label: "Accountant" },
+  ],
+};
+const SAVED_VIEWS = [
+  { v: "doomsday", label: "Doomsday", state: { filter: "all", kind: "", tags: ["doomsday"], needs: false } },
+  { v: "money", label: "Money path", state: { filter: "all", kind: "", tags: ["money-path"], needs: false } },
+  { v: "needs", label: "Needs you", state: { filter: "all", kind: "", tags: [], needs: true } },
+  { v: "ready", label: "Ready now", state: { filter: "ready", kind: "", tags: [], needs: false } },
+];
+const PRIORITY_TAGS = ["money-path", "doomsday", "security"];
+const RESOLUTIONS = { user: "Answered by you", default: "Default taken", research: "Settled by research", done: "Settled by step", obsolete: "Obsolete", superseded: "Superseded" };
 const STATUS_GROUP_ORDER = ["blocked", "doing", "todo", "done", "skip"];
 const TABS = [
   { v: "home", label: "Home", head: "The goal, what's waiting on you, and what's moving right now." },
@@ -459,6 +531,8 @@ let analyses = {};      // itemId -> analysis
 let questions = [];
 let steps = [];
 let goal = null;        // meta/goal body or null
+let schema = null;      // meta/schema body or null
+let idIndex = new Map(); // item id -> item
 let canWrite = true;
 let user = null;
 let db = null;
@@ -481,6 +555,18 @@ let pathSort = lsGet("adwear-path-sort", "recommended");
 const collapsed = new Set();
 try { JSON.parse(lsGet("adwear-collapsed", "[]")).forEach(k => collapsed.add(k)); } catch (e) {}
 let query = "";
+let kindF = "";               // checklist kind filter
+const tagF = new Set();       // checklist tag filter (item must carry all)
+let needsYou = false;         // checklist "Needs you" view
+try {
+  const f = JSON.parse(lsGet("adwear-cl-facets", "{}"));
+  if (typeof f.kind === "string") kindF = f.kind;
+  if (Array.isArray(f.tags)) f.tags.forEach(t => tagF.add(t));
+  needsYou = !!f.needs;
+} catch (e) {}
+const saveFacets = () => lsSet("adwear-cl-facets", JSON.stringify({ kind: kindF, tags: [...tagF], needs: needsYou }));
+let pendingNow = null;        // item waiting for "add anyway" while Now is full
+let depError = "";            // drawer message after a refused dependency
 
 let drawerId = null;           // item shown in the drawer
 let drawerShown = null;        // item the drawer last painted (to keep its scroll position)
@@ -532,6 +618,35 @@ function openQuestions() {
   return questions.filter(q => q.status !== "answered")
     .sort((a, b) => (b.blocking ? 1 : 0) - (a.blocking ? 1 : 0) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
 }
+function kinds() { return (schema && Array.isArray(schema.kinds) && schema.kinds.length ? schema : DEFAULT_SCHEMA).kinds; }
+function tagDefs() { return (schema && Array.isArray(schema.tags) && schema.tags.length ? schema : DEFAULT_SCHEMA).tags; }
+function kindLabel(v) { const k = kinds().find(x => x.v === v); return k ? k.label : v; }
+function tagLabel(v) { const t = tagDefs().find(x => x.v === v); return t ? t.label : String(v).replace(/^external:/, ""); }
+const byId = id => idIndex.get(id);
+const isClosed = it => !!it && (it.status === "done" || it.status === "skip");
+const tagsOf = it => Array.isArray(it.tags) ? it.tags : [];
+const depsOf = it => Array.isArray(it.dependsOn) ? it.dependsOn : [];
+// A missing (removed) dependency counts as unmet so it stays visible until someone removes it.
+function unmetDeps(it) { return depsOf(it).filter(id => !isClosed(byId(id))); }
+function blockedByDeps(it) { return !isClosed(it) && unmetDeps(it).length > 0; }
+function isReady(it) { return (it.status === "todo" || it.status === "doing") && !unmetDeps(it).length && !openBlocking(it.id).length; }
+function blocksOf(it) { return items.filter(i => depsOf(i).includes(it.id)); }
+function needsOwner(it) { return tagsOf(it).includes("needs-owner") || questions.some(q => q.status !== "answered" && (q.itemId === it.id || (Array.isArray(q.alsoItems) && q.alsoItems.includes(it.id)))); }
+// Returns the ids on a dependency loop that runs through startId, or null.
+function findCycle(startId) {
+  const seen = new Set();
+  const walk = (id, path) => {
+    for (const d of depsOf(byId(id) || {})) {
+      if (d === startId) return [...path, d];
+      if (seen.has(d)) continue;
+      seen.add(d);
+      const r = walk(d, [...path, d]);
+      if (r) return r;
+    }
+    return null;
+  };
+  return walk(startId, [startId]);
+}
 function hasTask(it) {
   return !!(it.phase || analyses[it.id] || steps.some(s => s.itemId === it.id) || questions.some(q => q.itemId === it.id));
 }
@@ -555,7 +670,11 @@ function statusCounts() {
 }
 function matches(it) {
   if (filter === "open" && !(it.status === "todo" || it.status === "doing")) return false;
-  if (filter === "blocked" && !isBlocked(it)) return false;
+  if (filter === "ready" && !isReady(it)) return false;
+  if (filter === "blocked" && !(isBlocked(it) || blockedByDeps(it))) return false;
+  if (kindF && (it.kind || "") !== kindF) return false;
+  for (const t of tagF) if (!tagsOf(it).includes(t)) return false;
+  if (needsYou && !needsOwner(it)) return false;
   if (filter === "done" && it.status !== "done") return false;
   return queryHit(it);
 }
@@ -590,6 +709,12 @@ function phaseBadge(phase) {
   if (!phase || !PHASES[phase]) return null;
   return el("span", { class: "badge ph-" + phase, text: (phase === "done" ? "✓ " : "") + PHASES[phase] });
 }
+function waitBadge(it) {
+  const n = blockedByDeps(it) ? unmetDeps(it).length : 0;
+  return n ? el("span", { class: "badge b-wait", title: `Waiting on ${n} unfinished ${n === 1 ? "dependency" : "dependencies"}`, text: `⛓ waiting on ${n}` }) : null;
+}
+function kindChip(it) { return it.kind ? el("span", { class: "kchip", title: (kinds().find(k => k.v === it.kind) || {}).hint || null, text: kindLabel(it.kind) }) : null; }
+function tagChips(it) { return tagsOf(it).map(t => el("span", { class: "tchip", "data-t": t, text: tagLabel(t) })); }
 function blockedBadge(it) {
   const n = openBlocking(it.id).length;
   if (n) return el("span", { class: "badge b-blocked", text: "Blocked · " + plural(n, "question") });
@@ -653,9 +778,10 @@ function renderTabs() {
 
 /* ---------- Home ---------- */
 function renderHome() {
-  const left = el("div", { class: "col" }, renderGoalBox(), renderNowLane());
-  const right = el("div", { class: "col" }, renderWaiting(), renderNextLane(), renderRecent());
-  return el("div", { class: "home" }, left, right);
+  return el("div", { class: "home" },
+    el("div", { class: "col" }, renderGoalBox(), renderNowLane()),
+    el("div", { class: "col" }, renderWaiting(), renderReadyNext()),
+    el("div", { class: "col" }, renderNextLane(), renderRecent()));
 }
 
 function renderGoalBox() {
@@ -723,6 +849,42 @@ function renderNowLane() {
   return lane;
 }
 
+function readyNext() {
+  const prio = it => PRIORITY_TAGS.some(t => tagsOf(it).includes(t)) ? 0 : 1;
+  return items.filter(i => i.queue !== "now" && isReady(i))
+    .sort((a, b) => (a.queue === "next" ? 0 : 1) - (b.queue === "next" ? 0 : 1)
+      || (a.queue === "next" && b.queue === "next" ? byQueueOrder(a, b) : 0)
+      || prio(a) - prio(b) || byArea(a, b));
+}
+function renderReadyNext() {
+  const all = readyNext();
+  const list = all.slice(0, 8);
+  const nNow = items.filter(i => i.queue === "now").length;
+  const box = el("section", { class: "panel lane", "aria-labelledby": "ready-h" },
+    el("div", { class: "lane-head" }, el("h2", { id: "ready-h", text: "Ready next" }), el("span", { class: "tally", text: String(all.length) })),
+    el("p", { class: "lane-hint", text: nNow >= WIP_LIMIT ? `Now is full (${nNow} / ${WIP_LIMIT}). Moving more in goes over the limit.` : "Nothing in the way: dependencies done, no question stopping them." }));
+  if (!list.length) { box.append(el("p", { class: "empty-filter", text: "Nothing is ready right now." })); return box; }
+  box.append(el("div", {}, list.map(it => {
+    const btns = el("div", { class: "card-ctrl" });
+    if (canWrite) {
+      if (pendingNow === it.id) {
+        btns.append(el("button", { class: "btn small primary", type: "button", id: "now-yes-" + it.id, text: "Add anyway", onclick: () => { pendingNow = null; setQueue(it, "now"); } }),
+          el("button", { class: "btn small", type: "button", id: "now-no-" + it.id, text: "Cancel", onclick: () => { pendingNow = null; focusAfter = "now-" + it.id; render(); } }));
+      } else {
+        btns.append(el("button", { class: "btn small", type: "button", id: "now-" + it.id, "aria-label": `Move ${it.title} to Now`, text: "→ Now", onclick: () => {
+          if (items.filter(i => i.queue === "now").length >= WIP_LIMIT) { pendingNow = it.id; focusAfter = "now-no-" + it.id; render(); }
+          else setQueue(it, "now");
+        } }));
+      }
+    }
+    return el("div", { class: "ready-row" },
+      el("div", { class: "rt" }, itemLink(it), el("small", {}, it.queue === "next" ? el("span", { text: "Next ·" }) : null, el("span", { text: areaOf(it).title }), kindChip(it), tagChips(it))),
+      btns);
+  })));
+  if (all.length > list.length) box.append(el("a", { class: "hint", href: "#/checklist", onclick: () => { filter = "ready"; lsSet("adwear-launch-filter", filter); }, text: `+ ${all.length - list.length} more ready in the Checklist` }));
+  return box;
+}
+
 function renderNextLane() {
   const list = items.filter(i => i.queue === "next").sort(byQueueOrder);
   const lane = el("section", { class: "panel lane", "aria-labelledby": "next-h" },
@@ -751,6 +913,8 @@ function renderCard(it, o = {}) {
   if (o.showPhase !== false) { const pb = phaseBadge(it.phase); if (pb) top.append(pb); }
   const bb = blockedBadge(it);
   if (bb) top.append(bb);
+  const wb = waitBadge(it);
+  if (wb) top.append(wb);
   const foot = el("div", { class: "card-foot" },
     el("span", { text: [LABEL[it.status] || it.status, t.total ? `${t.done}/${t.total} steps` : ""].filter(Boolean).join(" · ") }));
   if (canWrite && (o.move || o.queue)) {
@@ -860,8 +1024,10 @@ function renderInbox() {
     box.append(el("details", { class: "answered panel" }, el("summary", { text: `Recently answered (${answered.length})` }),
       el("div", {}, answered.map(q => {
         const it = q.itemId ? items.find(i => i.id === q.itemId) : null;
-        return el("div", { class: "qa" }, el("strong", { text: q.text }), el("div", { class: "answer", text: q.answer || "" }),
-          el("small", {}, it ? itemLink(it) : "Whole launch", q.answeredAt ? " · " + fmtDate(q.answeredAt) : ""));
+        return el("div", { class: "qa" }, el("strong", { text: q.text }),
+          q.resolution ? el("span", {}, el("span", { class: "res", text: resolutionText(q) })) : null,
+          q.answer ? el("div", { class: "answer", text: q.answer }) : null,
+          el("small", {}, it ? itemLink(it) : "Whole launch", q.answeredAt ? " · " + fmtDate(q.answeredAt) : ""), alsoLinks(q));
       }))));
   }
   return box;
@@ -873,6 +1039,8 @@ function renderQuestionCard(q, ctx) {
     q.blocking ? el("span", { class: "badge b-ask", text: "Stops work" }) : null,
     el("p", { class: "q", text: q.text })));
   if (q.why) card.append(el("p", { class: "why", text: "Decides: " + q.why }));
+  const also = alsoLinks(q);
+  if (also) card.append(also);
   if (canWrite) {
     const ta = el("textarea", { id: "ans-" + q.id + "-" + ctx, "aria-label": "Your answer to: " + q.text, placeholder: "Your answer" });
     ta.value = drafts[q.id] || "";
@@ -895,19 +1063,22 @@ async function answer(q, text) {
 // Columns are data so later steps can add more (tags, kind, depends on) without touching the row code.
 const COLUMNS = [
   { key: "status", label: "Status", cls: "c-status", cell: it => statusSelect(it, "cst-", true) },
-  { key: "title", label: "Item", cls: "c-title", cell: it => itemLink(it, "row-title") },
+  { key: "title", label: "Item", cls: "c-title", cell: it => { const n = blockedByDeps(it) ? unmetDeps(it).length : 0; return n ? [el("span", { class: "deps-n sm-only", title: `Waiting on ${n}`, text: `⛓${n} ` }), itemLink(it, "row-title")] : itemLink(it, "row-title"); } },
+  { key: "kind", label: "Kind", cls: "c-kind hide-sm", cell: it => kindChip(it) || el("span", { class: "dash", text: "–" }) },
+  { key: "tags", label: "Tags", cls: "c-tags hide-sm", cell: it => { const c = tagChips(it); return c.length ? el("span", { class: "tag-cell", title: tagsOf(it).map(tagLabel).join(", ") }, c) : null; } },
   { key: "area", label: () => groupBy === "area" ? "Section" : "Area", cls: "c-area hide-sm",
     cell: it => groupBy === "area" ? el("span", { class: "sec-cell", text: sectionTitle(it.section) })
       : el("span", { class: "area-cell" }, areaOf(it).title, el("small", { text: sectionTitle(it.section) })) },
   { key: "phase", label: "Phase", cls: "c-phase", cell: it => phaseBadge(it.phase) || el("span", { class: "dash", text: "–" }) },
   { key: "steps", label: "Steps", cls: "c-steps hide-sm", cell: it => { const t = stepTally(it.id); return t.total ? `${t.done}/${t.total}` : el("span", { class: "dash", text: "–" }); } },
+  { key: "deps", label: "Deps", cls: "c-deps hide-sm", cell: it => { const n = blockedByDeps(it) ? unmetDeps(it).length : 0; return n ? el("span", { class: "deps-n", title: `Waiting on ${n} unfinished ${n === 1 ? "dependency" : "dependencies"}`, text: `⛓ ${n}` }) : null; } },
   { key: "blocked", label: "Blocked", cls: "c-blk hide-sm", cell: it => { const n = openBlocking(it.id).length; return n ? el("span", { class: "badge b-blocked", text: plural(n, "question") }) : it.status === "blocked" ? el("span", { class: "badge b-blocked", text: "Blocked" }) : null; } },
   { key: "updated", label: "Updated", cls: "c-upd hide-sm", cell: it => fmtDate(it.updatedAt) },
 ];
 
 function renderChecklistTools() {
   const c = statusCounts();
-  const n = { all: items.length, open: c.todo + c.doing, blocked: items.filter(isBlocked).length, done: c.done };
+  const n = { all: items.length, open: c.todo + c.doing, ready: items.filter(isReady).length, blocked: items.filter(i => isBlocked(i) || blockedByDeps(i)).length, done: c.done };
   $("chips").replaceChildren(...FILTERS.map(f => el("button", {
     class: "chip", type: "button", id: "f-" + f.v, "aria-pressed": String(filter === f.v),
     onclick: () => { filter = f.v; lsSet("adwear-launch-filter", filter); render(); },
@@ -916,12 +1087,45 @@ function renderChecklistTools() {
     class: "seg-btn", type: "button", id: "g-" + g.v, "aria-pressed": String(groupBy === g.v),
     onclick: () => { groupBy = g.v; lsSet("adwear-groupby", groupBy); render(); },
   }, g.label)));
+  renderFacets();
+}
+
+function viewActive(V) {
+  const st = V.state;
+  return filter === st.filter && kindF === st.kind && needsYou === st.needs && tagF.size === st.tags.length && st.tags.every(t => tagF.has(t));
+}
+function renderFacets() {
+  const views = el("div", { class: "facet", role: "group", "aria-label": "Saved views" }, el("span", { class: "seg-label", text: "Views" }),
+    SAVED_VIEWS.map(V => {
+      const on = viewActive(V);
+      return el("button", { class: "chip sm view", type: "button", id: "sv-" + V.v, "aria-pressed": String(on), onclick: () => {
+        const st = on ? { filter: "all", kind: "", tags: [], needs: false } : V.state;
+        filter = st.filter; kindF = st.kind; needsYou = st.needs; tagF.clear(); st.tags.forEach(t => tagF.add(t));
+        lsSet("adwear-launch-filter", filter); saveFacets(); render();
+      } }, V.label);
+    }));
+  const ks = el("select", { class: "q-select", id: "kind-f", "aria-label": "Filter by kind" },
+    el("option", { value: "", text: "Any kind", selected: !kindF }),
+    kinds().map(k => el("option", { value: k.v, text: k.label, selected: kindF === k.v })));
+  ks.addEventListener("change", () => { kindF = ks.value; saveFacets(); render(); });
+  const tags = el("div", { class: "facet", role: "group", "aria-label": "Filter by tags (all selected must match)" }, el("span", { class: "seg-label", text: "Tags" }),
+    tagDefs().map(t => el("button", { class: "chip sm", type: "button", id: "tf-" + t.v.replace(/[^a-z0-9-]/gi, "-"), "aria-pressed": String(tagF.has(t.v)), title: t.hint || null,
+      onclick: () => { tagF.has(t.v) ? tagF.delete(t.v) : tagF.add(t.v); saveFacets(); render(); } }, t.label,
+      el("b", { text: String(items.filter(i => tagsOf(i).includes(t.v)).length) }))));
+  const any = kindF || tagF.size || needsYou;
+  $("facets").replaceChildren(...[views, el("div", { class: "facet" }, el("span", { class: "seg-label", text: "Kind" }), ks), tags,
+    any ? el("button", { class: "link-btn", type: "button", id: "facets-clear", text: "Clear kind/tags", onclick: () => { kindF = ""; tagF.clear(); needsYou = false; saveFacets(); render(); } }) : null].filter(Boolean));
 }
 
 function checklistGroups() {
   if (groupBy === "status") {
     return STATUS_GROUP_ORDER.map(s => ({ key: "s:" + s, title: LABEL[s], all: items.filter(i => i.status === s).sort(byArea) }))
       .concat([{ key: "s:other", title: "Other", all: items.filter(i => !STATUS_GROUP_ORDER.includes(i.status)).sort(byArea) }])
+      .filter(g => g.all.length);
+  }
+  if (groupBy === "kind") {
+    return kinds().map(k => ({ key: "k:" + k.v, title: k.label, blurb: k.hint, all: items.filter(i => i.kind === k.v).sort(byArea) }))
+      .concat([{ key: "k:none", title: "No kind", all: items.filter(i => !kinds().some(k => k.v === i.kind)).sort(byArea) }])
       .filter(g => g.all.length);
   }
   if (groupBy === "none") return [{ key: "all", title: null, all: [...items].sort(byArea) }];
@@ -934,7 +1138,7 @@ function checklistGroups() {
 function renderChecklist() {
   renderChecklistTools();
   const box = el("div", { style: "display:grid;gap:22px;min-width:0" });
-  const narrowed = !!query || filter !== "all";
+  const narrowed = !!query || filter !== "all" || !!kindF || tagF.size > 0 || needsYou;
   let shown = 0;
   for (const g of checklistGroups()) {
     const rows = g.all.filter(matches);
@@ -942,7 +1146,7 @@ function renderChecklist() {
     if (narrowed && !rows.length && adding !== (g.area && g.area.key)) continue;
     box.append(renderGroup(g, rows));
   }
-  if (!shown && narrowed) box.prepend(notice("No items match.", "Try another filter or clear the search."));
+  if (!shown && narrowed) box.prepend(notice("No items match.", "Try another filter, view or tag, or clear the search."));
   return box;
 }
 
@@ -1059,14 +1263,14 @@ function renderDrawer() {
   const it = items.find(i => i.id === drawerId);
   const head = el("div", { class: "drawer-head" },
     el("div", {},
-      el("div", { class: "eyebrow", text: it ? `${areaOf(it).title} · ${sectionTitle(it.section)}` : "Item" }),
+      el("div", { class: "eyebrow", text: it ? (areaOf(it).title === sectionTitle(it.section) ? areaOf(it).title : `${areaOf(it).title} · ${sectionTitle(it.section)}`) : "Item" }),
       el("h2", { id: "drawer-title", tabindex: "-1", text: it ? it.title : (loaded ? "Item not found" : "Loading…") })),
     el("button", { class: "icon-btn", type: "button", id: "drawer-close", "aria-label": "Close details", title: "Close (Esc)", text: "✕", onclick: closeDrawer }));
   const body = el("div", { class: "drawer-body", id: "drawer-body" });
   if (!it) {
     body.append(el("p", { class: "hint", text: loaded ? "This item doesn't exist any more. It may have been removed." : "Loading the item…" }));
   } else {
-    body.append(renderItemDetail(it));
+    body.append(renderItemDetail(it), renderKindTags(it), renderDeps(it));
     if (hasTask(it)) body.append(...renderTask(it));
     else body.append(el("p", { class: "hint", text: "No task yet. Ask Claude in the conversation to analyze this item." }));
   }
@@ -1077,7 +1281,8 @@ function renderDrawer() {
 
 function renderItemDetail(it) {
   const sec = el("section", {});
-  sec.append(el("div", { class: "d-ctrl" }, statusSelect(it, "st-", false), phaseBadge(it.phase), blockedBadge(it),
+  sec.append(el("div", { class: "d-ctrl" }, statusSelect(it, "st-", false), phaseBadge(it.phase), blockedBadge(it), waitBadge(it),
+    isReady(it) ? el("span", { class: "badge b-ready", text: "Ready" }) : null,
     (canWrite || it.queue) ? queueSelect(it, "d") : null));
   if (it.detail) sec.append(el("p", { class: "detail", text: it.detail }));
   if (editingNote) {
@@ -1108,6 +1313,79 @@ function renderItemDetail(it) {
   return sec;
 }
 
+function renderKindTags(it) {
+  const sec = el("section", {}, el("h3", { text: "Kind & tags" }));
+  if (!canWrite) {
+    const chips = [kindChip(it), ...tagChips(it)].filter(Boolean);
+    sec.append(chips.length ? el("div", { class: "tag-toggles" }, chips) : el("p", { class: "hint", text: "None set." }));
+    return sec;
+  }
+  const ks = el("select", { class: "q-select", id: "kind-" + it.id, "aria-label": "Kind of " + it.title },
+    el("option", { value: "", text: "No kind", selected: !it.kind }),
+    kinds().map(k => el("option", { value: k.v, text: k.label + (k.hint ? " — " + k.hint : ""), selected: it.kind === k.v })));
+  if (it.kind && !kinds().some(k => k.v === it.kind)) ks.append(el("option", { value: it.kind, text: it.kind, selected: true }));
+  ks.addEventListener("change", () => setKind(it, ks.value));
+  const known = tagDefs().map(t => t.v);
+  const extra = tagsOf(it).filter(t => !known.includes(t)).map(t => ({ v: t, label: tagLabel(t) }));
+  sec.append(el("div", { class: "d-ctrl" }, ks),
+    el("div", { class: "tag-toggles", role: "group", "aria-label": "Tags" }, [...tagDefs(), ...extra].map(t =>
+      el("button", { class: "chip sm", type: "button", id: "tt-" + it.id + "-" + t.v.replace(/[^a-z0-9-]/gi, "-"), "aria-pressed": String(tagsOf(it).includes(t.v)), title: t.hint || null,
+        onclick: () => toggleTag(it, t.v) }, t.label))));
+  return sec;
+}
+
+function depRow(id, removable, it) {
+  const d = byId(id);
+  const met = isClosed(d);
+  const li = el("li", { "data-met": String(met) },
+    el("span", { class: "mark", "aria-hidden": "true", text: met ? "✓" : "○" }),
+    d ? itemLink(d) : el("span", { text: "Removed item (" + id + ")" }),
+    el("small", { text: d ? (LABEL[d.status] || d.status) : "missing" }));
+  if (removable) li.append(el("button", { class: "icon-btn", type: "button", id: "dep-rm-" + id, "aria-label": "Remove dependency on " + (d ? d.title : id), title: "Remove", text: "✕", onclick: () => removeDep(it, id) }));
+  return li;
+}
+
+function renderDeps(it) {
+  const sec = el("section", {});
+  const deps = depsOf(it);
+  const unmet = unmetDeps(it).length;
+  sec.append(el("h3", { text: `Depends on · ${deps.length ? `${deps.length - unmet}/${deps.length} done` : "nothing"}` }));
+  const cyc = findCycle(it.id);
+  if (cyc) sec.append(el("p", { class: "warn", role: "alert", text: "Dependency loop: " + cyc.map(id => (byId(id) || { title: id }).title).join(" → ") + ". Remove one link to break it." }));
+  if (deps.length) sec.append(el("ul", { class: "dep-list" }, deps.map(id => depRow(id, canWrite, it))));
+  if (canWrite) {
+    const listId = "dep-opts-" + it.id;
+    const inp = el("input", { id: "dep-add-" + it.id, list: listId, placeholder: "Search an item to depend on…", "aria-label": "Add a dependency" });
+    const opts = el("datalist", { id: listId }, items.filter(i => i.id !== it.id && !deps.includes(i.id)).sort(byArea).map(i => el("option", { value: `${i.title} [${i.id}]` })));
+    const add = () => addDep(it, inp.value, inp);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(); } });
+    sec.append(el("div", { class: "dep-add" }, inp, opts, el("button", { class: "btn small", type: "button", text: "Add", onclick: add })));
+    sec.append(el("p", { class: "warn", id: "dep-err-" + it.id, role: "status", hidden: !depError, text: depError }));
+  }
+  const rev = blocksOf(it).sort(byArea);
+  if (rev.length) sec.append(el("h3", { text: `Blocks · ${rev.length}` }), el("ul", { class: "dep-list" }, rev.map(r => depRow(r.id, false, it))));
+  return sec;
+}
+
+function resolutionText(q) {
+  const r = q.resolution;
+  if (!r) return "";
+  if (r === "superseded") {
+    const by = q.supersededBy ? questions.find(x => x.id === q.supersededBy) : null;
+    return "Superseded by " + (by ? "“" + by.text + "”" : (q.supersededBy || "a newer question"));
+  }
+  if (r === "done") {
+    const st = q.resolvedBy ? steps.find(x => x.id === q.resolvedBy) : null;
+    return "Settled by step" + (st ? " “" + st.title + "”" : q.resolvedBy ? " " + q.resolvedBy : "");
+  }
+  return RESOLUTIONS[r] || r;
+}
+function alsoLinks(q) {
+  const ids = Array.isArray(q.alsoItems) ? q.alsoItems.filter(id => id !== q.itemId) : [];
+  if (!ids.length) return null;
+  return el("div", { class: "also" }, el("span", { text: "Also affects:" }), ids.map(id => { const i = byId(id); return i ? itemLink(i) : el("span", { text: id }); }));
+}
+
 function renderTask(it) {
   const a = analyses[it.id];
   const out = [];
@@ -1134,7 +1412,8 @@ function renderTask(it) {
   if (qs.length) {
     out.push(el("section", {}, el("h3", { text: "Questions" }), el("ul", { class: "qs" }, qs.map(q => el("li", {},
       q.status === "answered"
-        ? el("div", { class: "qa" }, el("strong", { text: q.text }), el("div", { class: "answer", text: q.answer || "" }))
+        ? el("div", { class: "qa" }, el("strong", { text: q.text }), q.resolution ? el("span", {}, el("span", { class: "res", text: resolutionText(q) })) : null,
+            q.answer ? el("div", { class: "answer", text: q.answer }) : null, alsoLinks(q))
         : renderQuestionCard(q, "d"))))));
   }
 
@@ -1256,6 +1535,7 @@ function applyHash() {
     drawerFocusPending = true;
     editingNote = false;
     pendingDelete = null;
+    depError = "";
   }
   if (!drawerId && was) { restoreFocusFor = was; editingNote = false; pendingDelete = null; }
   render();
@@ -1353,6 +1633,52 @@ async function saveStopRule(it, text) {
   const v = text.trim();
   if ((it.stopRule || "") === v) return;
   try { await db.collection("items").doc(it.id).update({ stopRule: v, updatedAt: now(), updatedBy: myId }); }
+  catch (e) { showError(e); }
+}
+async function setKind(it, kind) {
+  const v = kind || null;
+  if ((it.kind || null) === v) return;
+  try { await db.collection("items").doc(it.id).update({ kind: v, updatedAt: now(), updatedBy: myId }); }
+  catch (e) { showError(e); render(); }
+}
+async function toggleTag(it, tag) {
+  const cur = tagsOf(it);
+  const tags = cur.includes(tag) ? cur.filter(t => t !== tag) : [...cur, tag];
+  try { await db.collection("items").doc(it.id).update({ tags, updatedAt: now(), updatedBy: myId }); }
+  catch (e) { showError(e); }
+}
+async function addDep(it, text, inp) {
+  const v = String(text || "").trim();
+  if (!v) return;
+  const m = v.match(/\[([^\]]+)\]$/);
+  const target = m ? byId(m[1]) : items.find(i => i.title.toLowerCase() === v.toLowerCase());
+  depError = "";
+  if (!target) depError = "No item matches that. Pick one from the list.";
+  else if (target.id === it.id) depError = "An item can't depend on itself.";
+  else if (depsOf(it).includes(target.id)) depError = "Already a dependency.";
+  else if (target.id === it.id || depsOf(target).includes(it.id) || (function reaches(id, seen) {
+    // Would target (transitively) depend on this item? Then adding the link closes a loop.
+    if (id === it.id) return true;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return depsOf(byId(id) || {}).some(d => reaches(d, seen));
+  })(target.id, new Set())) depError = "That would create a dependency loop: “" + target.title + "” already depends on this item.";
+  if (depError) {
+    // The field still holds text, so a full render is skipped; write the message straight into place.
+    const n = $("dep-err-" + it.id);
+    if (n) { n.textContent = depError; n.hidden = false; }
+    return;
+  }
+  if (inp) { inp.value = ""; inp.blur(); }
+  focusAfter = "dep-add-" + it.id;
+  try { await db.collection("items").doc(it.id).update({ dependsOn: [...depsOf(it), target.id], updatedAt: now(), updatedBy: myId }); }
+  catch (e) { showError(e); }
+  render();
+}
+async function removeDep(it, id) {
+  depError = "";
+  focusAfter = "dep-add-" + it.id;
+  try { await db.collection("items").doc(it.id).update({ dependsOn: depsOf(it).filter(d => d !== id), updatedAt: now(), updatedBy: myId }); }
   catch (e) { showError(e); }
 }
 async function setStepStatus(s, status) {
@@ -1454,6 +1780,7 @@ applyHash();
 
   db.collection("items").onSnapshot(snap => {
     items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    idIndex = new Map(items.map(i => [i.id, i]));
     if (!snap.metadata.fromCache) { loaded = true; clearTimeout(timer); }
     if (!items.length && loaded) stateMsg = { strong: "No items yet.", text: "The checklist is filled in by Claude; ask in the conversation to load or extend it." };
     render();
@@ -1472,6 +1799,10 @@ applyHash();
   }, () => {});
   db.doc("meta/goal").onSnapshot(snap => {
     goal = snap.exists ? snap.data() : null;
+    render();
+  }, () => {});
+  db.doc("meta/schema").onSnapshot(snap => {
+    schema = snap.exists ? snap.data() : null;
     render();
   }, () => {});
 })();
