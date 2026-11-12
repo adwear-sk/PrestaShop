@@ -1,0 +1,147 @@
+# Weekly check that prod still runs a maintained, unaffected PrestaShop.
+# Policy: follow the maintained stable line and ship upstream security fixes quickly
+# (upstream deleted 9.1.x after 9.2.0, so a fork can fall off support silently).
+# Compares the version on `production` (src/Core/Version.php) with:
+#   1. the newest stable PrestaShop release tag (no -beta / -rc);
+#   2. published PrestaShop core security advisories whose affected range contains it;
+#   3. `composer audit` of composer.lock (vendor libraries + native modules such as
+#      ps_facetedsearch, which ship through Composer).
+# Any hit sends one alert. It never changes or deploys anything: upgrade by merging the
+# release tag (see the ps-core-upgrade notes), then push `production`.
+#
+# Limits: scheduled runs fire only from the default branch (production since
+# 2026-11-12). Custom modules and the theme are not covered (no upstream).
+#
+# Optional repo secret ALERT_URL: the same plain-POST URL as healthcheck.sh (an ntfy
+# topic works). Without it the run fails when something is found, and GitHub's
+# failed-run e-mail is the alert.
+name: Upstream check
+
+on:
+  schedule:
+    - cron: "37 6 * * 1"   # Mondays 06:37 UTC, after the base image check
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash   # -eo pipefail: a failed lookup inside $(…) fails the step
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: production
+          persist-credentials: false
+
+      - name: Compare with upstream releases and advisories
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current=$(sed -n "s/.*public const VERSION = '\(.*\)';/\1/p" src/Core/Version.php)
+          [ -n "$current" ] || { echo "::error::no VERSION in src/Core/Version.php"; exit 1; }
+          findings=()
+
+          # 1. Newest stable release tag upstream.
+          latest=$(git ls-remote --tags --refs https://github.com/PrestaShop/PrestaShop \
+            | sed -n 's#.*refs/tags/\([0-9][0-9.]*\)$#\1#p' | sort -V | tail -n 1)
+          [ -n "$latest" ] || { echo "::error::could not list PrestaShop release tags"; exit 1; }
+          if [ "$(printf '%s\n' "$current" "$latest" | sort -V | tail -n 1)" != "$current" ]; then
+            findings+=("newer release $latest (prod runs $current)")
+          fi
+
+          # 2. Core advisories whose affected range contains the current version.
+          gh api --paginate 'repos/PrestaShop/PrestaShop/security-advisories?state=published&per_page=100' \
+            --jq '.[] | . as $a | .vulnerabilities[]? | select(.package.name == "prestashop/prestashop")
+                  | [$a.ghsa_id, $a.severity, .vulnerable_version_range, (.patched_versions // "")] | @tsv' > advisories.tsv
+          hits=$(python3 - "$current" advisories.tsv <<'PY'
+          import re, sys
+
+          def v(s):
+              return tuple(int(p) for p in s.split("-")[0].split(".") if p.isdigit())
+
+          OPS = {">=": lambda a, b: a >= b, "<=": lambda a, b: a <= b, ">": lambda a, b: a > b,
+                 "<": lambda a, b: a < b, "=": lambda a, b: a == b, "": lambda a, b: a == b}
+
+          def holds(cur, cond):
+              op = next((o for o in (">=", "<=", ">", "<", "=") if cond.startswith(o)), "")
+              return OPS[op](cur, v(cond[len(op):].strip()))
+
+          def in_range(cur, rng):
+              # Upstream mixes formats: ">= 9.0.0, < 9.2.1" (all must hold), "< 8.2.6 and < 9.1.1"
+              # (one per branch: any), "8.1.0, 8.1.1" (a list of exact versions: any).
+              parts = [p.strip() for p in rng.split(",") if p.strip()]
+              if " and " in rng:
+                  alts = [[p.strip()] for p in rng.split(" and ")]
+              elif parts and all(re.fullmatch(r"[\d.]+", p) for p in parts):
+                  alts = [[p] for p in parts]
+              else:
+                  alts = [parts]
+              return any(all(holds(cur, c) for c in alt) for alt in alts)
+
+          def fixed(cur, patched):
+              # "9.2.1", "8.2.6 & 9.1.1", "8.1.1, 8.0.5, 1.7.8.10": a fix on our branch at or below
+              # us, or every listed fix at or below us (old open ranges such as ">= 8.1.0").
+              ps = [v(p) for p in re.findall(r"\d+(?:\.\d+)+", patched)]
+              if not ps:
+                  return False
+              return any(p[:2] == cur[:2] and p <= cur for p in ps) or max(ps) <= cur
+
+          cur = v(sys.argv[1])
+          seen = set()
+          for line in open(sys.argv[2]):
+              ghsa, sev, rng, patched = line.rstrip("\n").split("\t")
+              if ghsa not in seen and in_range(cur, rng) and not fixed(cur, patched):
+                  seen.add(ghsa)
+                  print(f"{ghsa} ({sev}, fixed in {patched or 'nothing yet'})")
+          PY
+          )
+          if [ -n "$hits" ]; then
+            findings+=("$(echo "$hits" | wc -l) core advisories affect $current: $(echo "$hits" | paste -sd ';' | sed 's/;/; /g')")
+          fi
+
+          # 3. Known vulnerabilities in the locked Composer packages.
+          rc=0; composer audit --locked --no-dev --abandoned=ignore --format=plain > audit.txt 2>&1 || rc=$?
+          if grep -q 'security vulnerability advisor' audit.txt && ! grep -q '^No security vulnerability' audit.txt; then
+            findings+=("composer audit: $(grep -c '^Package' audit.txt || true) vulnerable package entries (see the run log)")
+          elif [ "$rc" != 0 ]; then
+            findings+=("composer audit itself failed (exit $rc, see the run log)")
+          fi
+          cat audit.txt
+
+          {
+            echo "Prod runs PrestaShop $current; newest stable release $latest."
+            for f in "${findings[@]}"; do echo "- $f"; done
+            [ ${#findings[@]} -gt 0 ] || echo "Nothing to do."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ ${#findings[@]} -gt 0 ]; then
+            msg="adwear: PrestaShop upstream check: $(printf '%s. ' "${findings[@]}")Plan the upgrade on the task board."
+            echo "msg=$msg" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Alert
+        if: steps.check.outputs.msg != ''
+        env:
+          ALERT_URL: ${{ secrets.ALERT_URL }}
+          MSG: ${{ steps.check.outputs.msg }}
+        run: |
+          if [ -n "$ALERT_URL" ]; then
+            curl -fsS -o /dev/null --max-time 10 -d "$MSG" "$ALERT_URL" || { echo "::error::alert delivery failed: $MSG"; exit 1; }
+          else
+            echo "::error::$MSG"
+            exit 1
+          fi
+
+      # A broken check is silent otherwise: tell ALERT_URL too, not only e-mail.
+      - name: Alert on a failed check
+        if: failure()
+        env:
+          ALERT_URL: ${{ secrets.ALERT_URL }}
+        run: |
+          [ -n "$ALERT_URL" ] || exit 0
+          curl -fsS -o /dev/null --max-time 10 -d "adwear: the PrestaShop upstream check itself failed; see the Upstream check run." "$ALERT_URL"
