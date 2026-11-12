@@ -113,6 +113,12 @@ RUN echo "PS_TRUSTED_PROXIES=172.16.0.0/12" > .env.local \
 # mail layouts). Keep a copy outside it so the deploy can sync them in.
 RUN cp -a mails/themes /usr/local/share/adwear-mail-themes
 
+# app/config is a named volume too (it holds parameters.php), which hid every
+# upstream config change from prod. Same fix: a copy the deploy syncs in. The
+# per-instance parameters files are never part of it.
+RUN cp -a app/config /usr/local/share/adwear-app-config \
+  && rm -f /usr/local/share/adwear-app-config/parameters.php /usr/local/share/adwear-app-config/parameters.yml
+
 # The directories PrestaShop writes to at runtime are mounted as volumes in
 # docker-compose; make sure their mount points are owned by www-data.
 RUN mkdir -p img upload download var mails app/config \

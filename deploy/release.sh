@@ -73,6 +73,17 @@ fi
 docker compose up -d --force-recreate app
 echo "$(date -u +%FT%TZ) $image" >> "$LOG"
 
+# app/config is the ps-config volume (it holds parameters.php), so it hides the
+# image's config files and upstream changes to them never reached prod. Sync
+# them in from the image's copy before anything boots the kernel; the copy has
+# no parameters.php/.yml, so those stay. Images built before 2026-11-12 have
+# no copy: warn instead of failing, so rolling back to one still works.
+if docker compose exec -T app test -d /usr/local/share/adwear-app-config; then
+  docker compose exec -T -u www-data app cp -a /usr/local/share/adwear-app-config/. app/config/
+else
+  echo "WARNING: this image has no app/config copy; app/config left as it was"
+fi
+
 # Keep the current and the previous image, drop the rest (~4 GB each).
 keep=$(awk '{print $2}' "$LOG" | tac | awk '!seen[$0]++' | head -n 2)
 repo=${image%:*}
