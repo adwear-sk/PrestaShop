@@ -26,7 +26,8 @@ merge into the file before publishing.
 | Collection / doc | Fields |
 |---|---|
 | `meta/goal` | `goal`, `principles[]`, `updatedAt`, `updatedBy` — **owned by the user**; change only on their word |
-| `items/<id>` | `section`, `order`, `status` (todo\|doing\|blocked\|done\|skip), `title`, `detail`, `note`, `updatedAt`, `updatedBy`; workflow fields `phase` (analyzing\|choose\|planned\|working\|done), `chosenPath`, `stopRule`; queue fields `queue` (now\|next\|later\|null), `queueOrder` (10, 20, …) |
+| `meta/schema` | `kinds[]`, `tags[]` (`{v, label, hint}`) — the only allowed values for item `kind` / `tags`; add a value here before using it |
+| `items/<id>` | `section`, `order`, `status` (todo\|doing\|blocked\|done\|skip), `title`, `detail`, `note`, `updatedAt`, `updatedBy`; `kind` (build\|fix\|check\|decide\|routine), `tags[]`, `dependsOn[]` (item ids — never store the reverse); workflow fields `phase` (analyzing\|choose\|planned\|working\|done), `chosenPath`, `stopRule`; queue fields `queue` (now\|next\|later\|null), `queueOrder` (10, 20, …); `duplicateOf` (item/step id) |
 | `analyses/<itemId>` | `request`, `goalCheck{verdict,reasoning,reframedGoal}`, `summary`, `paths[]{key,title,origin,approach,strengths[],weaknesses[],effort,risk,fitsGoal,flow,usable,rejectReason,recommended}`, `recommendation`, `planFlow`, `createdAt` — `flow`/`planFlow` are Mermaid text the page draws |
 | `questions/<id>` | `itemId` (null = global), `alsoItems[]` (other items it applies to — never duplicate a question), `text`, `why`, `blocking`, `answer`, `status` (open\|answered — the page treats anything not `answered` as open), `resolution` (user\|default\|research\|done\|obsolete\|superseded), `resolvedBy` (step id / `repo:sha` / item id), `supersededBy` (question id), `dependsOn` (question id), `createdAt`, `answeredAt` |
 | `steps/<id>` | `itemId`, `order` (10, 20, …), `title`, `detail`, `status` (todo\|doing\|done\|skip), `checkpoint` (stop after this step), `commit` (`repo:sha` — the part before `:` groups the Unpushed lane), `pushed` (true once shipped), `verified`, `note` |
@@ -42,17 +43,29 @@ open", dump it fresh (subagents can't read the board themselves):
 
 ```
 ArtifactData list  collection=<c>  query={"limit":1000}  out_dir=<scratchpad>/board   for c in items, questions, analyses, steps
-ArtifactData get   meta/goal
+ArtifactData get   meta/goal, meta/schema
 ```
 
 Pass `<scratchpad>/board` to the analyzer. Re-dump after the user may have edited the page (answers, choices).
+
+**Digest** — after a dump, print one line per open item and work from it (python over the dump dir, scratchpad only):
+`id | kind | area | status/phase | queue | tags | unmet deps | open Q (blocking)` plus the open questions and
+unpushed steps. Compute, never store:
+- **ready** = status todo|doing, every `dependsOn` item done or skip, no open blocking question;
+- **blocks** = items whose `dependsOn` contains this id;
+- **conflicts** = dependency cycles, deps on missing ids, open questions on done items, commits with no step.
+"Next step" / "what should we do" picks from **ready** items (Now lane first, then Next, then `money-path` /
+`doomsday` / `security` tags) — never an item waiting on deps; say which deps it waits on instead.
+Areas (page display only): platform = foundations+performance+cicd, shop = checkout+catalogue+ux,
+content = seo+marketing; others map 1:1.
 
 ## Lifecycle
 
 1. **Intake** — dump the board, read `meta/goal`, find the matching item (grep the dump by title/detail/note) or
    plan a new one. Set `phase: analyzing`.
 2. **Analyze** — run the `analyzer` agent with the verbatim request, the goal, the item id and the dump path.
-   Write `analyses/<itemId>` + `questions/*` (+ the new item if `newItem`) in one batch, set `phase: choose`.
+   Write `analyses/<itemId>` + `questions/*` (+ the new item if `newItem`, with its `kind`, `tags`, `dependsOn`)
+   in one batch, set `phase: choose`. New `dependsOn` edges the analysis found on existing items go in the same batch.
    Apply its `boardFindings` (stale/duplicate/drifted docs) in the same batch when obvious; mention the rest.
 3. **Present** — goal check verdict first. ≤ 5 usable paths: all in chat (strengths/weaknesses as bullets).
    > 5: goal check + top 3 + "N more usable, M rejected — full list on the board: <URL>". List blocking questions.

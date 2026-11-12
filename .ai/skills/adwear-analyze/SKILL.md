@@ -61,7 +61,8 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
 ```json
 {
   "itemId": "<checklist item id or proposed new id, kebab-case with section prefix>",
-  "newItem": null | {"section": "<section key>", "title": "…", "detail": "…"},
+  "newItem": null | {"section": "<section key>", "title": "…", "detail": "…", "kind": "build|fix|check|decide|routine",
+                     "tags": ["<from meta/schema>"], "dependsOn": ["<item id>"]},
   "analysis": {
     "request": "<verbatim>",
     "goalCheck": {"verdict": "sound|reframe|doubtful", "reasoning": "…", "reframedGoal": "…|null"},
@@ -76,6 +77,9 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
 }
 ```
 
-`boardFindings` (optional): stale, duplicate or drifted board docs you noticed — the main agent fixes them.
+`boardFindings` (optional): stale, duplicate or drifted board docs you noticed — the main agent fixes them;
+include missing dependency edges as `{"doc": "items/<id>", "finding": "dependsOn", "fix": "add <other id>"}`.
+`tags` only from `meta/schema` in the dump; recommend paths that respect `dependsOn` (an item waiting on an
+unfinished one says so in its summary instead of planning around it).
 Section keys: foundations, legal, checkout, catalogue, seo, performance, security, ops, cicd, ownerapp, ux, marketing, tooling.
 Evidence over opinion: cite file paths, query results or command output for claims about the current state.
