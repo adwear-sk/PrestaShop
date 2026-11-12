@@ -11,11 +11,13 @@ PrestaShop is an open-source e-commerce platform built on Symfony. It follows a 
 
 ## Branching & Versioning
 
-PrestaShop follows [SemVer](https://semver.org/). Active branches merge upward: `9.1.x` → `develop`. Target the lowest applicable branch.
+PrestaShop follows [SemVer](https://semver.org/). Active branches merge upward: `9.2.x` → `develop`. Target the lowest applicable branch.
 
-- **`9.1.x`**: Current stable (patch releases). Bug fixes and minor improvements only — no new features.
-- **`develop`**: Next minor (9.2.0). New features and improvements go here. No breaking changes.
+- **`9.2.x`**: Current stable (patch releases). Bug fixes and minor improvements only — no new features.
+- **`develop`**: Next minor. New features and improvements go here. No breaking changes.
 - **`8.2.x`**: LTS, security fixes only. Rarely modified.
+
+**Adwear fork:** `production` runs upstream **release tags** only (now 9.2.1), merged in — never a branch tip.
 
 Breaking changes are only allowed in major versions. See [ADR 0017](https://github.com/PrestaShop/adr/blob/master/0017-backward-compatibility-promise.md) for the backward compatibility promise. More architecture decisions at https://github.com/PrestaShop/adr.
 
