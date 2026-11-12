@@ -42,8 +42,9 @@ starred ones — permission classifier blocks secrets, prod SSH writes and workf
    (`docker run --rm -v /opt/adwear/custom/modules:/m alpine sh -c "mkdir /m/<name> && chown <sibling uid:gid> /m/<name> && chmod 2775 /m/<name>"`).
 3. Add the bind mount to `deploy/docker-compose.yml` (commit) **and** ★ by hand on the VPS copy
    (`cp` backup, then edit; Claude verifies with `diff` + `docker compose config -q`).
-4. ★ Full prod deploy (push `production`, or `gh workflow run deploy-prod.yml -R adwear-sk/PrestaShop --ref production`
-   to deploy only `origin/production`). **Never** a bare `docker compose up -d app` — recreating the container
+4. ★ Apply the mount by re-releasing the live image (no build; all post-recreate steps run):
+   `ssh … 'cd /opt/adwear && ./release.sh "$(sed -n "s/^APP_IMAGE=//p" .env)"'` — or push `production` if it has
+   commits to ship anyway. **Never** a bare `docker compose up -d app` — recreating the container
    wipes `.htaccess`, `translations/sk-SK` and module mail templates.
 5. ★ Push the module `main`; wait for its deploy.
 6. CMS pages the module links to must exist first. Then install:

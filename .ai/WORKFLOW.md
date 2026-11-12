@@ -100,6 +100,7 @@ reviews go through [`adwear-retro`](skills/adwear-retro/SKILL.md).
 `adwear-ship-plan` gives the order and paste-ready commands. Rules of thumb:
 - main `production` first if a module needs new compose mounts or migrations; then modules **one at a time**
   (each deploy restarts `app`); then theme.
+- A bad main deploy: `/opt/adwear/release.sh rollback` on the VPS (app image only; migrations stay).
 - After a module deploy that changes CSS: clear CCC bundles; after a version bump: run
   `prestashop:module upgrade <name> --env=prod` **after** the deploy finishes.
 - Claude cannot push to prod over SSH writes / dispatch workflows / set secrets — hand the user `! …`
