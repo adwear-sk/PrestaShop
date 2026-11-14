@@ -94,7 +94,7 @@ WORKDIR /var/www/html
 # Nothing a live shop needs: the web installer (reachable at /install-dev/ until
 # 2026-11-11), the git metadata and repo-only files. Caddy also refuses these
 # paths, so an image built before this line stays covered.
-RUN rm -rf install-dev .git .github docker-compose.yml Makefile
+RUN rm -rf install-dev .git .github docker-compose.yml Makefile bin/worktree.sh bin/pull-prod.sh
 
 # Production mode: the develop branch defaults _PS_MODE_DEV_ to true. Force it
 # off so the live store never runs in debug mode (no stack traces, faster).
