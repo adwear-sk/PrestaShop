@@ -73,7 +73,8 @@
 55 3 * * * find /opt/adwear/logs -name '*.log' -size +20M -exec truncate -s 0 {} \; >/dev/null 2>&1
 #
 # Weekly MySQL housekeeping (Sundays, after the backup and the prunes, before
-# the 04:00 Malfini run): rotates the slow query log that release.sh enables.
+# the 04:00 Malfini run): rotates the slow query log that release.sh enables
+# and logs the week's most expensive queries.
 57 3 * * 0 /opt/adwear/mysql-weekly.sh >> /opt/adwear/logs/cron-mysql-weekly.log 2>&1
 
 # Back-office, disk and sync health check. The front office and back office run separate

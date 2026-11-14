@@ -123,5 +123,8 @@ fi
 
 state="done"
 [ "$finished" -eq 0 ] && state="time budget hit, resumes next run"
+# healthcheck.sh alerts when this goes stale: a run that keeps failing or
+# keeps running out of time never touches it.
+if [ "$finished" -eq 1 ]; then touch "$APP_DIR/logs/.ok-prune-history"; fi
 echo "[$(date -u '+%F %T')] history pruned: $STOCK -$stock_deleted of $stock_before (keep ${KEEP_STOCK_DAYS}d of sync rows)," \
      "$NOTFOUND -$notfound_deleted of $notfound_before (keep ${KEEP_404_DAYS}d) ($state)"

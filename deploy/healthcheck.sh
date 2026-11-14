@@ -16,12 +16,16 @@
 # compiled container -> routing -> Twig. Anything that breaks the compiled
 # container breaks this.
 #
-# It also watches two things that break with the site still looking fine:
+# It also watches things that break with the site still looking fine:
 #   - disk usage. On 2026-11-04 crawlers filled the disk through the facet cache
 #     and binlogs, MySQL stopped committing and the whole shop 500'd for 13h.
 #   - the Malfini and Anda syncs, via the logs/.ok-sync-* markers the crontab touches on
 #     success. A container compiled while MySQL restarted on 2026-10-24 lost the
 #     module's commands and the syncs failed for 10 days with the site at 200.
+#     The nightly prune-history.sh touches logs/.ok-prune-history the same way.
+#   - MySQL: reachable, connections below max_connections, and no burst of
+#     queries killed at max_execution_time (the 2026-11-10 crawler outage held
+#     every connection with 2-minute facet counts while the homepage was cached).
 #
 # Output goes to logs/cron-healthcheck.log. Failures are logged on every run so
 # an ongoing outage is visible in the tail; recoveries are logged once.
@@ -50,6 +54,9 @@ CURL_TIMEOUT=20
 DISK_ALERT_PCT="${DISK_ALERT_PCT:-85}"
 STOCK_MAX_AGE=$((4 * 3600))      # hourly, with the 23:30 UTC slot skipped
 DAILY_MAX_AGE=$((26 * 3600))     # products and prices run once a day
+CONN_ALERT="${CONN_ALERT:-70}"   # of max_connections 80 (release.sh)
+CONN_OK="${CONN_OK:-60}"         # recovers below this
+KILLED_ALERT="${KILLED_ALERT:-3}" # queries killed at 120 s between two runs
 
 cd "$STACK_DIR" || exit 1
 
@@ -90,15 +97,71 @@ check_disk() {
   fi
 }
 
-check_sync() {
-  local name=$1 max_age=$2 marker="$STACK_DIR/logs/.ok-sync-$1" age
+check_marker() {
+  local name=$1 max_age=$2 marker="$STACK_DIR/logs/.ok-$1" age
   # No marker yet right after this check is installed: start the clock.
   [ -e "$marker" ] || touch "$marker"
   age=$(($(date +%s) - $(stat -c %Y "$marker")))
   if [ "$age" -gt "$max_age" ]; then
-    track "sync-$name" fail "sync-$name has not succeeded for $((age / 3600))h"
+    track "$name" fail "$name has not succeeded for $((age / 3600))h"
   else
-    track "sync-$name" ok "sync-$name succeeded"
+    track "$name" ok "$name succeeded"
+  fi
+}
+
+# Status counters are cumulative since mysqld started, so compare them with the
+# previous run's values (kept in a state file); a smaller value means mysqld
+# restarted, and then the delta is the value itself.
+mysql_status() {
+  timeout 30 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql --connect-timeout=5 -uroot -N -B -e "SHOW GLOBAL STATUS WHERE Variable_name IN (\"Threads_connected\", \"Connection_errors_max_connections\", \"Max_execution_time_exceeded\")"' 2>/dev/null
+}
+
+# Prints the named counter, or 0 if it is missing or not a number, so a bad
+# value can never stop the script before the back-office check.
+counter() {
+  local v
+  v=$(printf '%s\n' "$1" | awk -v k="$2" '$1 == k {print $2}')
+  case $v in ''|*[!0-9]*) echo 0 ;; *) echo "$v" ;; esac
+}
+
+check_mysql() {
+  local status file="$STACK_DIR/logs/.healthcheck.mysql-counters" conns errors killed
+  local prev_errors prev_killed d_errors d_killed
+  # One retry, like the HTTP check: a deploy can briefly recreate the container.
+  status=$(mysql_status) || { sleep 15; status=$(mysql_status); }
+  if [ -z "$status" ]; then
+    track mysql fail "MySQL does not answer (down, hung, or every connection taken)"
+    return
+  fi
+  track mysql ok "MySQL answers"
+  conns=$(counter "$status" Threads_connected)
+  errors=$(counter "$status" Connection_errors_max_connections)
+  killed=$(counter "$status" Max_execution_time_exceeded)
+
+  # First run (or a lost file): record a baseline instead of alerting on
+  # everything since mysqld started.
+  if [ ! -r "$file" ]; then
+    printf '%s %s\n' "$errors" "$killed" > "$file"
+    return
+  fi
+  read -r prev_errors prev_killed < "$file"
+  case $prev_errors in ''|*[!0-9]*) prev_errors=$errors ;; esac
+  case $prev_killed in ''|*[!0-9]*) prev_killed=$killed ;; esac
+  printf '%s %s\n' "$errors" "$killed" > "$file"
+  d_errors=$((errors >= prev_errors ? errors - prev_errors : errors))
+  d_killed=$((killed >= prev_killed ? killed - prev_killed : killed))
+
+  # Alert at CONN_ALERT, recover only below CONN_OK, so a load hovering at the
+  # threshold does not flip the state every run.
+  if [ "$conns" -ge "$CONN_ALERT" ] || [ "$d_errors" -gt 0 ]; then
+    track mysql-connections fail "MySQL connections at $conns, $d_errors refused since the last check"
+  elif [ "$conns" -lt "$CONN_OK" ]; then
+    track mysql-connections ok "MySQL connections at $conns"
+  fi
+  if [ "$d_killed" -ge "$KILLED_ALERT" ]; then
+    track mysql-killed fail "$d_killed queries hit the 120 s limit since the last check"
+  else
+    track mysql-killed ok "no burst of queries hitting the 120 s limit"
   fi
 }
 
@@ -139,13 +202,15 @@ diagnose() {
   fi
 }
 
-# Before the HTTP checks, which exit early. These need neither the app nor MySQL.
+# Before the HTTP checks, which exit early. These do not need the app.
 check_disk
-check_sync stock "$STOCK_MAX_AGE"
-check_sync products "$DAILY_MAX_AGE"
-check_sync prices "$DAILY_MAX_AGE"
-check_sync anda-stock "$STOCK_MAX_AGE"
-check_sync anda-products "$DAILY_MAX_AGE"
+check_marker sync-stock "$STOCK_MAX_AGE"
+check_marker sync-products "$DAILY_MAX_AGE"
+check_marker sync-prices "$DAILY_MAX_AGE"
+check_marker sync-anda-stock "$STOCK_MAX_AGE"
+check_marker sync-anda-products "$DAILY_MAX_AGE"
+check_marker prune-history "$DAILY_MAX_AGE"
+check_mysql
 
 ADMIN_DIR=$(admin_dir)
 if [ -z "$ADMIN_DIR" ]; then

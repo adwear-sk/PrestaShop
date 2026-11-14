@@ -7,6 +7,8 @@
 # without bound on the same disk that filled up on 2026-11-04. Keeps the
 # current file plus 4 weeks (slow.log.1 .. slow.log.4); FLUSH SLOW LOGS makes
 # mysqld reopen a fresh slow.log after the rename.
+#
+# Then logs a weekly query report from performance_schema (see below).
 set -euo pipefail
 
 cd /opt/adwear
@@ -30,3 +32,25 @@ docker compose exec -T mysql sh -c '
     MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot -e "FLUSH SLOW LOGS"
     echo "  slow.log.1: $(wc -l < slow.log.1) lines"
 '
+
+# Weekly query report: which statements cost the most this week, in total and
+# per single run, plus the counters that show memory and connection pressure.
+# The digest table is reset afterwards, so each report covers one week.
+# Status counters are cumulative since mysqld started (Uptime), so compare
+# reports by their difference.
+echo "[$(date -u '+%F %T')] query report"
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -t' <<'SQL'
+SELECT COUNT_STAR AS runs, ROUND(SUM_TIMER_WAIT / 1e12) AS total_s,
+       ROUND(AVG_TIMER_WAIT / 1e9) AS avg_ms, ROUND(MAX_TIMER_WAIT / 1e12, 1) AS max_s,
+       ROUND(SUM_ROWS_EXAMINED / COUNT_STAR) AS rows_examined, LEFT(DIGEST_TEXT, 110) AS query
+FROM performance_schema.events_statements_summary_by_digest
+WHERE SCHEMA_NAME IS NOT NULL ORDER BY SUM_TIMER_WAIT DESC LIMIT 20;
+SELECT COUNT_STAR AS runs, ROUND(MAX_TIMER_WAIT / 1e12, 1) AS max_s, LEFT(DIGEST_TEXT, 140) AS slowest_single_runs
+FROM performance_schema.events_statements_summary_by_digest
+WHERE SCHEMA_NAME IS NOT NULL ORDER BY MAX_TIMER_WAIT DESC LIMIT 10;
+SHOW GLOBAL STATUS WHERE Variable_name IN ('Uptime', 'Questions', 'Slow_queries',
+  'Max_execution_time_exceeded', 'Max_used_connections', 'Connection_errors_max_connections',
+  'Threads_created', 'Innodb_buffer_pool_reads', 'Innodb_buffer_pool_read_requests',
+  'Created_tmp_disk_tables', 'Created_tmp_tables');
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+SQL
