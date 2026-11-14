@@ -104,15 +104,45 @@ docker compose exec -T -u www-data app php -r "require '/var/www/html/config/con
 # translations and config pick them up. A failing file fails the deploy.
 chmod +x /opt/adwear/migrate.sh
 /opt/adwear/migrate.sh
-# Keep 3 days of binlogs (MySQL default is 30). There is no replica,
-# and at the default they took 21 GB of the disk in the 2026-11-04
-# outage. Set here as root because migrate.sh runs as the shop user,
-# and with SET PERSIST because it needs no MySQL restart: a restart
-# under traffic can compile a container with no modules in it.
-docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -e "SET PERSIST binlog_expire_logs_seconds = 259200"' || echo "WARNING: binlog retention not set"
-# Abort any SELECT running over 2 minutes, so a burst of expensive
-# faceted-filter counts cannot hold every connection for hours (2026-11-10).
-docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot -e "SET PERSIST max_execution_time = 120000"' || echo "WARNING: max_execution_time not set"
+# MySQL server settings: the whole budget lives here, re-applied on every
+# deploy. Set as root because migrate.sh runs as the shop user, and with
+# SET PERSIST because every value is dynamic and needs no MySQL restart:
+# a restart under traffic can compile a container with no modules in it.
+# The box has 3.8 GB RAM shared with 24 mod_php workers and the crons, and
+# mysqld was already 768 MB into swap at the 128 MB defaults (2026-11-14,
+# found-mysql). --force applies the rest if one statement fails.
+docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --force' <<'SQL' || echo "WARNING: some MySQL settings were not applied"
+-- 3 days of binlogs (default 30): no replica, and at the default they took
+-- 21 GB of the disk in the 2026-11-04 outage.
+SET PERSIST binlog_expire_logs_seconds = 259200;
+-- Smaller binlogs on disk; the payload stays readable by mysqlbinlog.
+SET PERSIST binlog_transaction_compression = ON;
+-- Abort any SELECT running over 2 minutes, so a burst of expensive
+-- faceted-filter counts cannot hold every connection for hours (2026-11-10).
+SET PERSIST max_execution_time = 120000;
+-- 512 MB holds the whole live DB once the tracking tables are pruned
+-- (~300 MB; 673 MB before); the 128 MB default read ~10 GB a day from disk.
+-- Kept below 768 MB because 24 busy workers (~87 MB each) plus the crons
+-- would leave too little RAM; raise it only if swap stays flat. Resized
+-- online in 128 MB chunks.
+SET PERSIST innodb_buffer_pool_size = 536870912;
+-- 512 MB redo (default 100 MB) absorbs the nightly import bursts.
+SET PERSIST innodb_redo_log_capacity = 536870912;
+-- One in-memory temp table may take 1 GB by default; only 51 ever spilled
+-- to disk, so 256 MB costs nothing and removes a per-query RAM surprise.
+SET PERSIST temptable_max_ram = 268435456;
+-- 24 Apache workers + crons + backup + healthcheck + CLI; 151 let a burst
+-- exhaust connections on 2026-10-03 before the worker cap existed.
+SET PERSIST max_connections = 80;
+-- Reuse threads instead of creating one per request (65k created at 9).
+SET PERSIST thread_cache_size = 32;
+-- Slow log at 2 s, at a fixed path (the default name carries the container
+-- hostname, which changes on every recreate). mysql-weekly.sh rotates it.
+SET PERSIST slow_query_log_file = '/var/lib/mysql/slow.log';
+SET PERSIST long_query_time = 2;
+SET PERSIST log_slow_admin_statements = ON;
+SET PERSIST slow_query_log = ON;
+SQL
 # The mail layouts (mails/themes) are git-managed but sit in the mails
 # volume, so sync them in from the image. Must run BEFORE the cache
 # clear: cache:clear warms the prod Twig cache, which never
@@ -140,7 +170,7 @@ docker compose exec -T -u www-data app php -r "require '/var/www/html/config/con
 docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; exit(Tools::generateRobotsFile(true) ? 0 : 1);" || echo "WARNING: robots.txt generation failed"
 # scp does not preserve the exec bit, and the crons call these
 # scripts directly.
-chmod +x /opt/adwear/prune-logs.sh /opt/adwear/prune-visitors.sh /opt/adwear/healthcheck.sh /opt/adwear/backup.sh
+chmod +x /opt/adwear/prune-logs.sh /opt/adwear/prune-visitors.sh /opt/adwear/healthcheck.sh /opt/adwear/backup.sh /opt/adwear/mysql-weekly.sh
 # Install the git-managed cron schedule (deploy/crontab).
 crontab /opt/adwear/crontab
 
