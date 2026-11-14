@@ -170,7 +170,7 @@ docker compose exec -T -u www-data app php -r "require '/var/www/html/config/con
 docker compose exec -T -u www-data app php -r "require '/var/www/html/config/config.inc.php'; exit(Tools::generateRobotsFile(true) ? 0 : 1);" || echo "WARNING: robots.txt generation failed"
 # scp does not preserve the exec bit, and the crons call these
 # scripts directly.
-chmod +x /opt/adwear/prune-logs.sh /opt/adwear/prune-visitors.sh /opt/adwear/healthcheck.sh /opt/adwear/backup.sh /opt/adwear/mysql-weekly.sh
+chmod +x /opt/adwear/prune-logs.sh /opt/adwear/prune-visitors.sh /opt/adwear/prune-history.sh /opt/adwear/healthcheck.sh /opt/adwear/backup.sh /opt/adwear/mysql-weekly.sh
 # Install the git-managed cron schedule (deploy/crontab).
 crontab /opt/adwear/crontab
 

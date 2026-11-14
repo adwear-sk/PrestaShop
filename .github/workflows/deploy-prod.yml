@@ -85,7 +85,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "deploy/crontab,deploy/prune-logs.sh,deploy/prune-visitors.sh,deploy/mysql-weekly.sh,deploy/healthcheck.sh,deploy/backup.sh,deploy/borgmatic,deploy/migrate.sh,deploy/release.sh,deploy/sql"
+          source: "deploy/crontab,deploy/prune-logs.sh,deploy/prune-visitors.sh,deploy/prune-history.sh,deploy/mysql-weekly.sh,deploy/healthcheck.sh,deploy/backup.sh,deploy/borgmatic,deploy/migrate.sh,deploy/release.sh,deploy/sql"
           target: /opt/adwear/
           strip_components: 1
 

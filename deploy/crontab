@@ -63,6 +63,12 @@
 # so the first nights work through the 3M-row backlog; after that it is a
 # no-op. Also after the backup, for the same reason; see the header there.
 47 3 * * * flock -n /tmp/prune-visitors.lock /opt/adwear/prune-visitors.sh >> /opt/adwear/logs/cron-prune-visitors.log 2>&1
+#
+# prune-history.sh trims the stock movement history (sync rows older than 90
+# days; order and BO rows stay) and the 404 log (30 days). Batched with a
+# 15-minute budget, so it is done before the 04:00 Malfini run; also after the
+# backup.
+48 3 * * * flock -n /tmp/prune-history.lock /opt/adwear/prune-history.sh >> /opt/adwear/logs/cron-prune-history.log 2>&1
 50 3 * * * cd /opt/adwear && docker compose exec -T -u www-data app find var/logs -name '*.log' -mtime +14 -delete >/dev/null 2>&1
 55 3 * * * find /opt/adwear/logs -name '*.log' -size +20M -exec truncate -s 0 {} \; >/dev/null 2>&1
 #
