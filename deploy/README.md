@@ -165,6 +165,7 @@ off-site copy to healthchecks.
 | Ship a module change | push to the module repo's `main`. |
 | Ship a theme change | push the theme repo's `main`. |
 | Roll back the app | `/opt/adwear/release.sh rollback` — back to the previous release (kept on disk, no pull), with all post-deploy steps. Run it again to return. Older: `release.sh list`, then `release.sh ghcr.io/adwear-sk/prestashop:<sha>`. Never just edit `APP_IMAGE` + `compose up`: that skips .htaccess, robots.txt, translations and the cache clear. Run as `deploy`, not root. A rollback does not undo applied `deploy/sql` migrations or the newer crontab and host scripts. |
+| Roll back a module | in the module repo `git revert <sha>` (or a range) and push `main`: the deploy rsyncs the tree as pushed, so the old files are back in one run. Don't force-push. `ps_module.version` stays at the newer number (PrestaShop never downgrades) — harmless, the next bump just goes past it; but anything an `upgrade/` script changed in the DB (config, hooks, tabs, tables) stays and must be undone by hand. |
 | See what is live | `/opt/adwear/release.sh list` (newest last); `.env` pins `APP_IMAGE` to the exact `:<sha>`. |
 | See logs | `docker compose logs -f app` |
 | Restore DB | `gunzip < backups/db-<stamp>.sql.gz \| docker compose exec -T mysql mysql -uroot -p"$DB_ROOT_PASSWD" "$DB_NAME"` |
