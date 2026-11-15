@@ -59,6 +59,12 @@ https://claude.ai/artifact/KsMrS3dk7cnLtxZYYMweEt — schema and operations in
   A clean `git status` at the root proves nothing; always use `git -C <repo> status`.
 - Parallel work goes in a worktree: `bin/worktree.sh up wtN 80N1` → `http://wtN.localhost:80N1`
   (shared DB — module installs/config changes hit every checkout).
+- **Assignee sessions:** "Start work as assignee wtN" runs [`adwear-assignee`](skills/adwear-assignee/SKILL.md) —
+  the session works only on board items assigned to wtN, codes in `~/AdwearPresta-wtN`, keeps research in the
+  gitignored `.ai/work/wtN/` and its progress in `.ai/work/wtN/progress.md`. The **main** session owns integration
+  (merges `wt/<name>` branches in main and every nested repo, records `repo:sha` on the steps) and everything that
+  touches the shared DB: module installs/upgrades, config writes, `deploy/sql` runs, `bin/pull-prod.sh`. An assignee
+  that needs one of those hands it to main through a step note and stops.
 
 ### 3. Implement
 
@@ -137,6 +143,7 @@ reviews go through [`adwear-retro`](skills/adwear-retro/SKILL.md).
 | [`adwear-ship-plan`](skills/adwear-ship-plan/SKILL.md) | Survey unpushed commits, ordered bulk-push plan |
 | [`adwear-module-release`](skills/adwear-module-release/SKILL.md) | Version bump, upgrade script, new-module prod rollout |
 | [`adwear-retro`](skills/adwear-retro/SKILL.md) | Session retro: what's worth saving as a skill, agent or memory note (proposals only) |
+| [`adwear-assignee`](skills/adwear-assignee/SKILL.md) | Run a session as board assignee wtN: own items, own worktree, progress log, own write-back |
 | [`scaffold-adwear-repo`](skills/scaffold-adwear-repo/SKILL.md) | New module/theme repo |
 
 **When to delegate:** the `analyzer` always runs as an agent (keeps the exploration out of the main context). Otherwise spawn agents for self-contained work with a small result (verification, review,

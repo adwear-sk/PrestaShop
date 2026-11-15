@@ -257,3 +257,6 @@ docker-compose.override.yml
 
 # Claude Code machine-local settings (permission rules, per-machine paths)
 .claude/settings.local.json
+
+# Assignee sessions' local findings and progress logs (see .ai/skills/adwear-assignee)
+/.ai/work/

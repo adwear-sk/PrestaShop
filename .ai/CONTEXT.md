@@ -82,6 +82,7 @@ Breaking changes are only allowed in major versions. See [ADR 0017](https://gith
 | `adwear-ship-plan` | [skills/adwear-ship-plan/SKILL.md](skills/adwear-ship-plan/SKILL.md) | "what's queued", "push in bulk", "prepare the deploy" |
 | `adwear-module-release` | [skills/adwear-module-release/SKILL.md](skills/adwear-module-release/SKILL.md) | "bump the module version", "roll out the new module to prod" |
 | `adwear-retro` | [skills/adwear-retro/SKILL.md](skills/adwear-retro/SKILL.md) | "retro", "anything worth saving?", "what should become a skill/agent" |
+| `adwear-assignee` | [skills/adwear-assignee/SKILL.md](skills/adwear-assignee/SKILL.md) | "start work as assignee wt1", "you are wt2", "continue as wt3" |
 
 ## Domain contexts
 
