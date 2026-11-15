@@ -325,6 +325,9 @@ details.rejected li span { color: var(--muted); }
 .tchip { font: 500 11px/1 var(--font-body); color: var(--ink); background: var(--todo-bg); border-radius: 999px; padding: 3px 8px; white-space: nowrap; display: inline-block; }
 .tchip[data-t="doomsday"], .tchip[data-t="security"] { color: var(--blocked); background: var(--blocked-bg); }
 .tchip[data-t="needs-owner"] { color: var(--ask); background: var(--ask-bg); }
+.achip { font: 600 11px/1 var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 2px 7px; white-space: nowrap; display: inline-block; }
+.achip[data-over="true"] { color: var(--blocked); background: var(--blocked-bg); border-color: transparent; }
+.work-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .tag-cell { display: flex; gap: 4px; overflow: hidden; }
 .b-wait { color: var(--doing); background: var(--doing-bg); }
 .b-ready { color: var(--accent); background: var(--accent-soft); }
@@ -568,6 +571,10 @@ if (!FILTERS.some(f => f.v === filter)) filter = "open";
 let groupBy = lsGet("adwear-groupby", "area");
 if (!GROUPS.some(g => g.v === groupBy)) groupBy = "area";
 let workMode = lsGet("adwear-work-mode", "board") === "queue" ? "queue" : "board";
+// Assignees: parallel Claude sessions (skill adwear-assignee). "" = unassigned, main picks it up.
+const ASSIGNEES = [["", "Unassigned"], ["main", "main"], ["wt1", "wt1"], ["wt2", "wt2"], ["wt3", "wt3"]];
+let assigneeF = lsGet("adwear-assignee-f", "");
+if (!ASSIGNEES.some(a => a[0] === assigneeF) && assigneeF !== "none") assigneeF = "";
 let pathSort = lsGet("adwear-path-sort", "recommended");
 const collapsed = new Set();
 try { JSON.parse(lsGet("adwear-collapsed", "[]")).forEach(k => collapsed.add(k)); } catch (e) {}
@@ -753,6 +760,27 @@ function queueSelect(it, ctx) {
   sel.addEventListener("change", () => setQueue(it, sel.value));
   return sel;
 }
+// Items an assignee has started and not finished. A worktree session works one item at a time.
+function inWorkFor(a) { return items.filter(i => i.assignee === a && i.status === "doing"); }
+function assigneeOver(a) { return !!a && a !== "main" && inWorkFor(a).length > 1; }
+function assigneeChip(it) {
+  if (!it.assignee) return null;
+  const over = assigneeOver(it.assignee);
+  return el("span", { class: "achip", "data-over": String(over), title: over ? `${it.assignee} has ${inWorkFor(it.assignee).length} items in work; a session works one at a time` : `Assigned to ${it.assignee}`, text: "→ " + it.assignee });
+}
+function assigneeSelect(it, ctx) {
+  const sel = el("select", { class: "q-select", id: "as-" + ctx + "-" + it.id, "aria-label": "Assignee for " + it.title, disabled: !canWrite });
+  for (const [v, l] of ASSIGNEES) sel.append(el("option", { value: v, text: v ? "Assignee: " + l : l, selected: (it.assignee || "") === v }));
+  sel.addEventListener("change", () => setAssignee(it, sel.value));
+  return sel;
+}
+function matchesAssignee(it) { return !assigneeF || (assigneeF === "none" ? !it.assignee : it.assignee === assigneeF); }
+function assigneeFilter() {
+  const sel = el("select", { class: "q-select", id: "assignee-f", "aria-label": "Filter by assignee" });
+  for (const [v, l] of [["", "Anyone"], ["none", "Unassigned"], ...ASSIGNEES.slice(1)]) sel.append(el("option", { value: v, text: v ? l : "Anyone", selected: assigneeF === v }));
+  sel.addEventListener("change", () => { assigneeF = sel.value; lsSet("adwear-assignee-f", assigneeF); render(); });
+  return el("label", { class: "facet" }, el("span", { class: "seg-label", text: "Assignee" }), sel);
+}
 function notice(strong, text, cls) {
   return el("div", { class: "notice" + (cls ? " " + cls : "") }, el("strong", { text: strong + (text ? " " : "") }), text || "");
 }
@@ -933,6 +961,8 @@ function renderCard(it, o = {}) {
   if (bb) top.append(bb);
   const wb = waitBadge(it);
   if (wb) top.append(wb);
+  const ac = assigneeChip(it);
+  if (ac) top.append(ac);
   const foot = el("div", { class: "card-foot" },
     el("span", { text: [LABEL[it.status] || it.status, t.total ? `${t.done}/${t.total} steps` : ""].filter(Boolean).join(" · ") }));
   if (canWrite && (o.move || o.queue)) {
@@ -955,12 +985,12 @@ function renderWork() {
   const seg = el("div", { class: "seg", role: "group", "aria-label": "Work view" },
     el("button", { class: "seg-btn", type: "button", id: "wm-board", "aria-pressed": String(workMode === "board"), onclick: () => setWorkMode("board") }, "By phase", el("b", { text: String(nActive) })),
     el("button", { class: "seg-btn", type: "button", id: "wm-queue", "aria-pressed": String(workMode === "queue"), onclick: () => setWorkMode("queue") }, "Queue", el("b", { text: String(nQueued) })));
-  return el("div", { style: "display:grid;gap:16px;min-width:0" }, el("div", {}, seg), workMode === "queue" ? renderQueueLanes() : renderBoard());
+  return el("div", { style: "display:grid;gap:16px;min-width:0" }, el("div", { class: "work-tools" }, seg, assigneeFilter()), workMode === "queue" ? renderQueueLanes() : renderBoard());
 }
 function setWorkMode(v) { workMode = v; lsSet("adwear-work-mode", v); render(); }
 
 function renderBoard() {
-  const active = items.filter(isActive);
+  const active = items.filter(isActive).filter(matchesAssignee);
   if (!active.length) return notice("No tasks in flight.", "Items get a task when Claude analyzes them; ask in the conversation.");
   const known = PHASE_COLS.map(p => p.v);
   const byWork = (a, b) => (QUEUE_RANK[a.queue] ?? 3) - (QUEUE_RANK[b.queue] ?? 3) || byQueueOrder(a, b);
@@ -981,7 +1011,7 @@ function renderQueueLanes() {
   const box = el("div", { style: "display:grid;gap:14px;min-width:0" });
   const grid = el("div", { class: "lanes" });
   for (const L of LANES) {
-    const list = items.filter(i => i.queue === L.v).sort(byQueueOrder);
+    const list = items.filter(i => i.queue === L.v && matchesAssignee(i)).sort(byQueueOrder);
     const over = L.v === "now" && list.length > WIP_LIMIT;
     const lane = el("section", { class: "lane", "data-over": String(over), "aria-label": L.label },
       el("div", { class: "lane-head" }, el("h3", { text: L.label }),
@@ -1002,6 +1032,13 @@ async function setQueue(it, lane) {
   if ((it.queue || null) === v) return;
   const max = Math.max(0, ...items.filter(i => v && i.queue === v).map(i => i.queueOrder || 0));
   try { await db.collection("items").doc(it.id).update({ queue: v, queueOrder: v ? max + 10 : null, updatedAt: now(), updatedBy: myId }); }
+  catch (e) { showError(e); }
+}
+
+async function setAssignee(it, a) {
+  const v = a || null;
+  if ((it.assignee || null) === v) return;
+  try { await db.collection("items").doc(it.id).update({ assignee: v, claimedAt: null, updatedAt: now(), updatedBy: myId }); }
   catch (e) { showError(e); }
 }
 
@@ -1372,7 +1409,8 @@ function renderItemDetail(it) {
   const sec = el("section", {});
   sec.append(el("div", { class: "d-ctrl" }, statusSelect(it, "st-", false), phaseBadge(it.phase), blockedBadge(it), waitBadge(it),
     isReady(it) ? el("span", { class: "badge b-ready", text: "Ready" }) : null,
-    (canWrite || it.queue) ? queueSelect(it, "d") : null));
+    (canWrite || it.queue) ? queueSelect(it, "d") : null,
+    (canWrite || it.assignee) ? assigneeSelect(it, "d") : null));
   if (it.detail) sec.append(el("p", { class: "detail", text: it.detail }));
   if (editingNote) {
     const ta = el("textarea", { id: "note-" + it.id, "aria-label": "Note for " + it.title });
