@@ -20,6 +20,9 @@ Read `.ai/WORKFLOW.md` and, for theme diffs, the styling guide in memory
   in `.gitignore`; one-off scripts committed; secrets/credentials in the diff; anything relying on local-only config.
 - **Conventions:** `adw-form` for forms, `material-icons-outlined`, Slovak copy, CSS in the right layer, reuse
   of shared partials, strict types/typed PHP, no `Db::getInstance()` in new Symfony-style code.
+- **Core changes:** any edit under `classes/`, `controllers/`, `src/`, `app/`, `config/`, `admin-dev/`, `js/` or
+  `composer.*` is a CONFIRMED finding titled `CORE CHANGE` unless the change is an upstream merge; a new or changed
+  `override/` file is reported as `OVERRIDE`. Say whether a module hook could do it instead.
 - **Scope:** unrelated changes mixed in; built assets edited instead of sources.
 
 Verify each finding by reading the surrounding code before reporting it. Output, most severe first:

@@ -47,6 +47,7 @@ https://claude.ai/artifact/KsMrS3dk7cnLtxZYYMweEt — schema and operations in
 | Storefront look / templates / JS | `themes/adwear` (adwear-sk/adwear-theme) | `theme-dev` | build + lint + `adwear-verify-storefront` |
 | Custom module (`adwear_*`, `ps_adwear*`, `malfini_api`, `category_migrator`) | `modules/<name>` (own repo) | `module-dev` | php -l, cache clear, render check |
 | Core override (`override/**`) | main repo (allowlist each file in `.gitignore`) | `module-dev` | class index regen + render check |
+| Core edit (`classes/`, `controllers/`, `src/`, `app/`, `config/`, `admin-dev/`, `js/`, `composer.*`) | main repo — **last resort** | `module-dev` | same as PHP + `CORE CHANGE` flag in the report |
 | Shop data that must reach prod (config, CMS, link blocks) | main repo `deploy/sql/` | any, via `adwear-deploy-sql` | run twice locally, 2nd = `Changed: 0` |
 | One-off data fix on prod | **no repo** (scratchpad only) | any, via `adwear-prod-oneoff` | run locally first |
 | Prod diagnosis (outage, crons, disk, logs) | none | `prod-investigator` (read-only) | — |
@@ -61,6 +62,9 @@ https://claude.ai/artifact/KsMrS3dk7cnLtxZYYMweEt — schema and operations in
 
 ### 3. Implement
 
+- **Core stays untouched:** module first, override only if a module can't do it, core edit only as a last resort.
+  Every override and core edit is flagged to the user explicitly (`OVERRIDE:` / `CORE CHANGE:` + why a module
+  couldn't do it), ideally before implementing. CI guard: board item `cicd-core-guard`.
 - Read the memory/notes for the area first (styling guide for theme work, rollout notes for modules).
 - Theme: edit `src/`, never built assets. Forms use `adw-form`; icons `material-icons-outlined`;
   Slovak copy hardcoded, core strings keep `{l s=… d=…}`; keep every `js-*` / `data-ps-*` hook.
