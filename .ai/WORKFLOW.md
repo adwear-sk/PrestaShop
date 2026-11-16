@@ -22,6 +22,10 @@ request (= idea) → analyzer: goal check + every usable path → board + chat �
 - **The board is the single source of truth.** Dump it before analyzing or picking the next step and pass the dump
   to the analyzer; never ask what it already answers, plans or asks elsewhere. Write back after acting: settled
   questions closed with a reason, chat answers recorded, every commit on a step (`adwear-task-board` § Keeping the board true).
+- **Launch scope:** the board is in its pre-launch chapter. `meta/goal.launch` defines launch (safely and legally
+  able to sell) with criteria L1–L6; every item is `launch: pre|post`. New findings default to **post** unless they
+  break a criterion, and moving anything into pre needs the user's OK. Pick pre items first
+  (`adwear-task-board` § Launch scope).
 - **No work on a task while it has an open blocking question.** New questions go on the board immediately —
   only real decisions; research what you can and take sensible defaults.
 - **Bypass only** when the user explicitly says so ("just do it", "skip analysis"), or for "next step" on an

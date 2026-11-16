@@ -34,6 +34,9 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
    - Is the problem real? Look for evidence in code, local DB (prod clone), logs, or read-only prod checks.
    - Does solving it serve the true goal and principles, now, in the endgame? Is it worth the effort vs. other open items?
    - Is there a better or bigger framing (the request is a symptom of something else), or a reason not to do it at all?
+   - **Launch scope:** does it break one of the launch criteria in `meta/goal.launch` (L1 security, L2 doomsday,
+     L3 money path, L4 catalogue, L5 tests, L6 legal)? If not, it is post-launch work — say so in the reasoning and
+     keep the recommended path proportionate (no launch-blocking steps for post work).
    - Verdict: `sound` (do it as framed), `reframe` (goal is right but should be stated as `reframedGoal`), `doubtful` (probably not worth doing — say why).
 3. **Breadth first — enumerate every alternative.** No cap, no padding; 2 is fine if only 2 exist, 20 is fine if 20 exist. Sweep:
    - the user's idea as stated (`origin: user-idea`), and variations on it;
@@ -65,7 +68,8 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
 {
   "itemId": "<checklist item id or proposed new id, kebab-case with section prefix>",
   "newItem": null | {"section": "<section key>", "title": "…", "detail": "…", "kind": "build|fix|check|decide|routine",
-                     "tags": ["<from meta/schema>"], "dependsOn": ["<item id>"]},
+                     "tags": ["<from meta/schema>"], "dependsOn": ["<item id>"],
+                     "launch": "post | pre", "launchReason": "<criterion it breaks, e.g. 'L3 — order mail missing'; null for post>"},
   "analysis": {
     "request": "<verbatim>",
     "goalCheck": {"verdict": "sound|reframe|doubtful", "reasoning": "…", "reframedGoal": "…|null"},
@@ -83,7 +87,9 @@ The user's request is an **idea to explore, not a chosen direction**. Never impl
 
 `boardFindings` (optional): stale, duplicate or drifted board docs you noticed — the main agent fixes them;
 include missing dependency edges as `{"doc": "items/<id>", "finding": "dependsOn", "fix": "add <other id>"}`.
+`launch` defaults to `post`; propose `pre` only with the criterion it breaks — the user confirms (see
+`adwear-task-board` § Launch scope). A `pre` item may not depend on a `post` one: split it or flag it.
 `tags` only from `meta/schema` in the dump; recommend paths that respect `dependsOn` (an item waiting on an
 unfinished one says so in its summary instead of planning around it).
-Section keys: foundations, legal, checkout, catalogue, seo, performance, security, ops, cicd, ownerapp, ux, marketing, tooling.
+Section keys: foundations, legal, checkout, catalogue, seo, performance, scale, security, ops, cicd, ownerapp, ux, marketing, tooling.
 Evidence over opinion: cite file paths, query results or command output for claims about the current state.

@@ -33,12 +33,13 @@ everyone else are in [WORKFLOW](../../WORKFLOW.md) §2 and [`adwear-task-board`]
    uncommitted work from an earlier session is yours to finish or explain — never discard it.
 3. Load `ArtifactData` (ToolSearch `select:ArtifactData`). Query `items` where `assignee` == `<a>`; for each, read
    its steps (`steps` where `itemId` ==), questions (`questions` where `itemId` ==) and `analyses/<itemId>`.
-   Save the dump in your scratchpad. Re-read before each write — other sessions and the page change the board.
+   Save the dump under `.ai/work/<a>/board/` (gitignored; the /tmp scratchpad dies on WSL restarts). Re-read before
+   each write — other sessions and the page change the board. Also read `meta/goal` (incl. `launch`).
 
 ## 3. Pick
 
-- The item you already claimed (`claimedAt` set, not done) comes first; otherwise the assigned item with the lowest
-  `queueOrder`. **One item at a time.**
+- The item you already claimed (`claimedAt` set, not done) comes first; otherwise the assigned `launch: pre` item
+  with the lowest `queueOrder`, then `post` ones. **One item at a time.**
 - Nothing assigned → say so and stop. Never take an unassigned item or another assignee's item.
 
 ## 4. Gates (same as the main session)
@@ -53,10 +54,16 @@ everyone else are in [WORKFLOW](../../WORKFLOW.md) §2 and [`adwear-task-board`]
 
 - Claim: set `claimedAt`, `status: doing`, `phase: working` on the item (pinned with `if_version`).
 - Work the step with the WORKFLOW loop **inside your checkout** (implement → verify → review → commit on `wt/<a>`).
+  The **`reviewer` agent is required** on every code diff before the step is done — record its verdict in `verified`.
   Core edits and overrides are flagged (`CORE CHANGE:` / `OVERRIDE:`) — module first.
 - **Hand to main, don't do:** module install/upgrade/uninstall, configuration writes, running `deploy/sql`,
-  `bin/pull-prod.sh`, anything on prod beyond read-only. Write `needs main: <what and why>` in the step note,
-  leave the step `doing`, report, stop.
+  category/product data changes on the shared DB, `bin/pull-prod.sh`, anything on prod beyond read-only. You may
+  write the migration or script in your checkout and test it read-only; main runs it. Write a step-note line
+  `NEEDS MAIN: <what, exact command/file, why>`, leave the step `doing`, report, stop.
+- **Findings about other items** (you can't write those docs): add a line to **your own item's** `note` starting
+  `NEEDS MAIN: <target doc> — <full text to copy>`, plus the same line in `progress.md`. Main copies it over and
+  clears the line. New items you think are needed: same way, with the proposed `launch` (default `post`; `pre`
+  only with the L1–L6 criterion it breaks — main asks the user).
 - Never push, never merge into `production`/`main` — integration is main's job.
 
 ## 6. Write back (after every step)
@@ -66,8 +73,13 @@ everyone else are in [WORKFLOW](../../WORKFLOW.md) §2 and [`adwear-task-board`]
   knows it awaits integration. Research: the full write-up in `.ai/work/<a>/<itemId>.md`, a summary plus that path
   in the step note.
 - New questions → `questions/<itemId>-qN` right away (triage as in `adwear-analyze` step 6).
-- All steps done → item `note` gets `READY TO INTEGRATE (wt/<a>)`; main merges and sets the item done.
+- All steps done → **rebase first**: in each repo you committed in, `git rebase <main tip>` (main's current
+  `production`/`main` branch in the main checkout) so main can fast-forward and the shas you record stay valid;
+  re-run the checks if the rebase touched your files, update `commit` on the steps. Then the item `note` gets
+  `READY TO INTEGRATE (wt/<a>)`; main merges and sets the item done.
 - `version_mismatch` → re-read the doc, merge your change into what it holds now, retry. Never write blind.
+- **Timestamps** (`updatedAt`, `claimedAt`, progress entries) come from `date -u +%Y-%m-%dT%H:%M:%SZ` — never
+  guess or round them.
 - Append to `progress.md`: date, item, step, outcome, next action.
 
 ## 7. Report

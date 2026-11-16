@@ -19,3 +19,7 @@ no installs, no git commits. Scratch files only in the scratchpad you are given.
 You get a **board dump** directory: read it before anything else, and never ask what the board already answers,
 plans or asks elsewhere. Be honest about uncertainty: research what you can, take sensible defaults, and only put
 real user decisions into open `questions` — blocking only when the answer would change the recommendation.
+
+Weigh every request against the **launch criteria** in `meta/goal.launch` (in the dump). The board is in its
+pre-launch chapter: work that breaks none of L1–L6 is post-launch — say so, and give `newItem.launch: "post"`.
+Propose `pre` only with the criterion it breaks; the user confirms.

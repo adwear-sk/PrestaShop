@@ -41,8 +41,9 @@ and goes through WORKFLOW §0 like any other change (`create-skill` for the buil
    | memory note | a fact, preference or gotcha, not a procedure |
    | retire/merge memory | a memory note now duplicated by a skill or out of date |
    | nothing | one-off, or already covered |
-4. **Rank** by expected reuse before launch (endgame: stability and launch work first; tooling for its own
-   sake ranks last). Drop anything with no evidence.
+4. **Rank** by expected reuse before launch: proposals that speed up `launch: pre` items (L1–L6 in
+   `meta/goal.launch`) first; tooling for its own sake ranks last and its board item gets `launch: post`.
+   Drop anything with no evidence.
 
 ## Output
 
