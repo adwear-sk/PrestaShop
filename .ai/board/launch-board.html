@@ -325,6 +325,10 @@ details.rejected li span { color: var(--muted); }
 .tchip { font: 500 11px/1 var(--font-body); color: var(--ink); background: var(--todo-bg); border-radius: 999px; padding: 3px 8px; white-space: nowrap; display: inline-block; }
 .tchip[data-t="doomsday"], .tchip[data-t="security"] { color: var(--blocked); background: var(--blocked-bg); }
 .tchip[data-t="needs-owner"] { color: var(--ask); background: var(--ask-bg); }
+.tchip[data-t="pre-launch"] { color: var(--ink); background: transparent; box-shadow: inset 0 0 0 1px var(--ink); }
+.launch-box { margin-top: 12px; display: grid; gap: 6px; }
+.launch-box .lp-head { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; flex-wrap: wrap; }
+.launch-box progress { width: 100%; height: 8px; accent-color: var(--ink); }
 .achip { font: 600 11px/1 var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 2px 7px; white-space: nowrap; display: inline-block; }
 .achip[data-over="true"] { color: var(--blocked); background: var(--blocked-bg); border-color: transparent; }
 .work-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -497,6 +501,7 @@ const GROUPS = [
   { v: "area", label: "Area" },
   { v: "status", label: "Status" },
   { v: "kind", label: "Kind" },
+  { v: "launch", label: "Launch" },
   { v: "none", label: "None" },
 ];
 // Built-in copy of meta/schema, used until (or unless) the doc exists.
@@ -518,10 +523,16 @@ const DEFAULT_SCHEMA = {
   ],
 };
 const SAVED_VIEWS = [
-  { v: "doomsday", label: "Doomsday", state: { filter: "all", kind: "", tags: ["doomsday"], needs: false } },
-  { v: "money", label: "Money path", state: { filter: "all", kind: "", tags: ["money-path"], needs: false } },
-  { v: "needs", label: "Needs you", state: { filter: "all", kind: "", tags: [], needs: true } },
-  { v: "ready", label: "Ready now", state: { filter: "ready", kind: "", tags: [], needs: false } },
+  { v: "prelaunch", label: "Pre-launch", state: { filter: "open", kind: "", tags: [], needs: false, launch: "pre" } },
+  { v: "doomsday", label: "Doomsday", state: { filter: "all", kind: "", tags: ["doomsday"], needs: false, launch: "" } },
+  { v: "money", label: "Money path", state: { filter: "all", kind: "", tags: ["money-path"], needs: false, launch: "" } },
+  { v: "needs", label: "Needs you", state: { filter: "all", kind: "", tags: [], needs: true, launch: "" } },
+  { v: "ready", label: "Ready now", state: { filter: "ready", kind: "", tags: [], needs: false, launch: "" } },
+];
+// Launch scope (meta/goal.launch): every item is pre (needed to sell safely and legally) or post. Unset = untriaged.
+const LAUNCH = [
+  { v: "pre", label: "Pre-launch", hint: "Needed before we can safely and legally sell (breaks one of L1–L6)." },
+  { v: "post", label: "Post-launch", hint: "Fine to do after launch." },
 ];
 const PRIORITY_TAGS = ["money-path", "doomsday", "security"];
 const RESOLUTIONS = { user: "Answered by you", default: "Default taken", research: "Settled by research", done: "Settled by step", obsolete: "Obsolete", superseded: "Superseded" };
@@ -582,13 +593,15 @@ let query = "";
 let kindF = "";               // checklist kind filter
 const tagF = new Set();       // checklist tag filter (item must carry all)
 let needsYou = false;         // checklist "Needs you" view
+let launchF = "";             // checklist launch filter: "", "pre", "post"
 try {
   const f = JSON.parse(lsGet("adwear-cl-facets", "{}"));
   if (typeof f.kind === "string") kindF = f.kind;
   if (Array.isArray(f.tags)) f.tags.forEach(t => tagF.add(t));
   needsYou = !!f.needs;
+  if (f.launch === "pre" || f.launch === "post") launchF = f.launch;
 } catch (e) {}
-const saveFacets = () => lsSet("adwear-cl-facets", JSON.stringify({ kind: kindF, tags: [...tagF], needs: needsYou }));
+const saveFacets = () => lsSet("adwear-cl-facets", JSON.stringify({ kind: kindF, tags: [...tagF], needs: needsYou, launch: launchF }));
 let pendingNow = null;        // item waiting for "add anyway" while Now is full
 let depError = "";            // drawer message after a refused dependency
 
@@ -700,6 +713,7 @@ function matches(it) {
   if (kindF && (it.kind || "") !== kindF) return false;
   for (const t of tagF) if (!tagsOf(it).includes(t)) return false;
   if (needsYou && !needsOwner(it)) return false;
+  if (launchF && (it.launch || "") !== launchF) return false;
   if (filter === "done" && it.status !== "done") return false;
   return queryHit(it);
 }
@@ -739,7 +753,16 @@ function waitBadge(it) {
   return n ? el("span", { class: "badge b-wait", title: `Waiting on ${n} unfinished ${n === 1 ? "dependency" : "dependencies"}`, text: `⛓ waiting on ${n}` }) : null;
 }
 function kindChip(it) { return it.kind ? el("span", { class: "kchip", title: (kinds().find(k => k.v === it.kind) || {}).hint || null, text: kindLabel(it.kind) }) : null; }
-function tagChips(it) { return tagsOf(it).map(t => el("span", { class: "tchip", "data-t": t, text: tagLabel(t) })); }
+function tagChips(it) {
+  const chips = tagsOf(it).map(t => el("span", { class: "tchip", "data-t": t, text: tagLabel(t) }));
+  if (it.launch === "pre") chips.unshift(el("span", { class: "tchip", "data-t": "pre-launch", title: LAUNCH[0].hint, text: "Pre-launch" }));
+  return chips;
+}
+function launchProgress() {
+  // Skipped items (merged into another, dropped) don't count either way.
+  const pre = items.filter(i => i.launch === "pre" && i.status !== "skip");
+  return { done: pre.filter(i => i.status === "done").length, total: pre.length, untriaged: items.filter(i => !i.launch && !isClosed(i)).length };
+}
 function blockedBadge(it) {
   const n = openBlocking(it.id).length;
   if (n) return el("span", { class: "badge b-blocked", text: "Blocked · " + plural(n, "question") });
@@ -854,13 +877,31 @@ function renderGoalBox() {
     box.append(el("details", { class: "principles" }, el("summary", { text: `Principles (${goal.principles.length})` }),
       el("ul", {}, goal.principles.map(t => el("li", { text: t })))));
   }
+  box.append(renderLaunchBox());
   return box;
+}
+
+function renderLaunchBox() {
+  const L = goal && goal.launch;
+  const p = launchProgress();
+  const wrap = el("div", { class: "launch-box" },
+    el("div", { class: "lp-head" }, el("strong", { text: `Pre-launch: ${p.done} of ${p.total} done` }),
+      el("a", { href: "#/checklist", onclick: () => { filter = "open"; launchF = "pre"; lsSet("adwear-launch-filter", filter); saveFacets(); }, text: "Show open pre-launch items" })),
+    el("progress", { max: String(p.total || 1), value: String(p.done), "aria-label": "Pre-launch items done" }));
+  if (p.untriaged) wrap.append(el("p", { class: "hint", text: `${plural(p.untriaged, "open item")} not triaged as pre or post yet.` }));
+  if (L) {
+    wrap.append(el("details", { class: "principles" }, el("summary", { text: "What launch means" }),
+      L.definition ? el("p", { class: "hint", text: L.definition }) : null,
+      el("ul", {}, (L.criteria || []).map(c => el("li", {}, el("strong", { text: `${c.key} ${c.label}: ` }), c.text))),
+      L.rule ? el("p", { class: "hint", text: L.rule }) : null));
+  }
+  return wrap;
 }
 
 async function saveGoal(text, principlesText) {
   editingGoal = false;
   focusAfter = "goal-edit";
-  const body = { goal: text.trim(), principles: principlesText.split("\n").map(s => s.trim()).filter(Boolean), updatedAt: now(), updatedBy: myId };
+  const body = { goal: text.trim(), principles: principlesText.split("\n").map(s => s.trim()).filter(Boolean), ...(goal?.launch ? { launch: goal.launch } : {}), updatedAt: now(), updatedBy: myId };
   render();
   try { await db.doc("meta/goal").set(body); } catch (e) { showError(e); }
 }
@@ -896,7 +937,7 @@ function renderNowLane() {
 }
 
 function readyNext() {
-  const prio = it => PRIORITY_TAGS.some(t => tagsOf(it).includes(t)) ? 0 : 1;
+  const prio = it => (it.launch === "pre" ? 0 : 2) + (PRIORITY_TAGS.some(t => tagsOf(it).includes(t)) ? 0 : 1);
   return items.filter(i => i.queue !== "now" && isReady(i))
     .sort((a, b) => (a.queue === "next" ? 0 : 1) - (b.queue === "next" ? 0 : 1)
       || (a.queue === "next" && b.queue === "next" ? byQueueOrder(a, b) : 0)
@@ -1218,15 +1259,15 @@ function renderChecklistTools() {
 
 function viewActive(V) {
   const st = V.state;
-  return filter === st.filter && kindF === st.kind && needsYou === st.needs && tagF.size === st.tags.length && st.tags.every(t => tagF.has(t));
+  return filter === st.filter && kindF === st.kind && needsYou === st.needs && launchF === st.launch && tagF.size === st.tags.length && st.tags.every(t => tagF.has(t));
 }
 function renderFacets() {
   const views = el("div", { class: "facet", role: "group", "aria-label": "Saved views" }, el("span", { class: "seg-label", text: "Views" }),
     SAVED_VIEWS.map(V => {
       const on = viewActive(V);
       return el("button", { class: "chip sm view", type: "button", id: "sv-" + V.v, "aria-pressed": String(on), onclick: () => {
-        const st = on ? { filter: "all", kind: "", tags: [], needs: false } : V.state;
-        filter = st.filter; kindF = st.kind; needsYou = st.needs; tagF.clear(); st.tags.forEach(t => tagF.add(t));
+        const st = on ? { filter: "all", kind: "", tags: [], needs: false, launch: "" } : V.state;
+        filter = st.filter; kindF = st.kind; needsYou = st.needs; launchF = st.launch; tagF.clear(); st.tags.forEach(t => tagF.add(t));
         lsSet("adwear-launch-filter", filter); saveFacets(); render();
       } }, V.label);
     }));
@@ -1234,13 +1275,18 @@ function renderFacets() {
     el("option", { value: "", text: "Any kind", selected: !kindF }),
     kinds().map(k => el("option", { value: k.v, text: k.label, selected: kindF === k.v })));
   ks.addEventListener("change", () => { kindF = ks.value; saveFacets(); render(); });
+  const ls = el("select", { class: "q-select", id: "launch-f", "aria-label": "Filter by launch scope" },
+    el("option", { value: "", text: "Pre + post", selected: !launchF }),
+    LAUNCH.map(l => el("option", { value: l.v, text: l.label, selected: launchF === l.v })));
+  ls.addEventListener("change", () => { launchF = ls.value; saveFacets(); render(); });
   const tags = el("div", { class: "facet", role: "group", "aria-label": "Filter by tags (all selected must match)" }, el("span", { class: "seg-label", text: "Tags" }),
     tagDefs().map(t => el("button", { class: "chip sm", type: "button", id: "tf-" + t.v.replace(/[^a-z0-9-]/gi, "-"), "aria-pressed": String(tagF.has(t.v)), title: t.hint || null,
       onclick: () => { tagF.has(t.v) ? tagF.delete(t.v) : tagF.add(t.v); saveFacets(); render(); } }, t.label,
       el("b", { text: String(items.filter(i => tagsOf(i).includes(t.v)).length) }))));
-  const any = kindF || tagF.size || needsYou;
-  $("facets").replaceChildren(...[views, el("div", { class: "facet" }, el("span", { class: "seg-label", text: "Kind" }), ks), tags,
-    any ? el("button", { class: "link-btn", type: "button", id: "facets-clear", text: "Clear kind/tags", onclick: () => { kindF = ""; tagF.clear(); needsYou = false; saveFacets(); render(); } }) : null].filter(Boolean));
+  const any = kindF || tagF.size || needsYou || launchF;
+  $("facets").replaceChildren(...[views, el("div", { class: "facet" }, el("span", { class: "seg-label", text: "Launch" }), ls),
+    el("div", { class: "facet" }, el("span", { class: "seg-label", text: "Kind" }), ks), tags,
+    any ? el("button", { class: "link-btn", type: "button", id: "facets-clear", text: "Clear filters", onclick: () => { kindF = ""; tagF.clear(); needsYou = false; launchF = ""; saveFacets(); render(); } }) : null].filter(Boolean));
 }
 
 function checklistGroups() {
@@ -1254,6 +1300,11 @@ function checklistGroups() {
       .concat([{ key: "k:none", title: "No kind", all: items.filter(i => !kinds().some(k => k.v === i.kind)).sort(byArea) }])
       .filter(g => g.all.length);
   }
+  if (groupBy === "launch") {
+    return LAUNCH.map(l => ({ key: "l:" + l.v, title: l.label, blurb: l.hint, all: items.filter(i => i.launch === l.v).sort(byArea) }))
+      .concat([{ key: "l:none", title: "Not triaged", blurb: "No launch scope yet: decide pre or post.", all: items.filter(i => !i.launch).sort(byArea) }])
+      .filter(g => g.all.length);
+  }
   if (groupBy === "none") return [{ key: "all", title: null, all: [...items].sort(byArea) }];
   return [...AREAS, OTHER_AREA].map(a => ({
     key: "a:" + a.key, title: a.title, blurb: a.blurb, area: a,
@@ -1264,7 +1315,7 @@ function checklistGroups() {
 function renderChecklist() {
   renderChecklistTools();
   const box = el("div", { style: "display:grid;gap:22px;min-width:0" });
-  const narrowed = !!query || filter !== "all" || !!kindF || tagF.size > 0 || needsYou;
+  const narrowed = !!query || filter !== "all" || !!kindF || tagF.size > 0 || needsYou || !!launchF;
   let shown = 0;
   for (const g of checklistGroups()) {
     const rows = g.all.filter(matches);
@@ -1452,9 +1503,13 @@ function renderKindTags(it) {
     kinds().map(k => el("option", { value: k.v, text: k.label + (k.hint ? " — " + k.hint : ""), selected: it.kind === k.v })));
   if (it.kind && !kinds().some(k => k.v === it.kind)) ks.append(el("option", { value: it.kind, text: it.kind, selected: true }));
   ks.addEventListener("change", () => setKind(it, ks.value));
+  const lsel = el("select", { class: "q-select", id: "launch-" + it.id, "aria-label": "Launch scope of " + it.title },
+    el("option", { value: "", text: "Launch: not triaged", selected: !it.launch }),
+    LAUNCH.map(l => el("option", { value: l.v, text: l.label + " — " + l.hint, selected: it.launch === l.v })));
+  lsel.addEventListener("change", () => setLaunch(it, lsel.value));
   const known = tagDefs().map(t => t.v);
   const extra = tagsOf(it).filter(t => !known.includes(t)).map(t => ({ v: t, label: tagLabel(t) }));
-  sec.append(el("div", { class: "d-ctrl" }, ks),
+  sec.append(el("div", { class: "d-ctrl" }, ks, lsel),
     el("div", { class: "tag-toggles", role: "group", "aria-label": "Tags" }, [...tagDefs(), ...extra].map(t =>
       el("button", { class: "chip sm", type: "button", id: "tt-" + it.id + "-" + t.v.replace(/[^a-z0-9-]/gi, "-"), "aria-pressed": String(tagsOf(it).includes(t.v)), title: t.hint || null,
         onclick: () => toggleTag(it, t.v) }, t.label))));
@@ -1765,6 +1820,11 @@ async function setKind(it, kind) {
   const v = kind || null;
   if ((it.kind || null) === v) return;
   try { await db.collection("items").doc(it.id).update({ kind: v, updatedAt: now(), updatedBy: myId }); }
+  catch (e) { showError(e); render(); }
+}
+async function setLaunch(it, v) {
+  if ((it.launch || "") === v) return;
+  try { await db.collection("items").doc(it.id).update({ launch: v || null, updatedAt: now(), updatedBy: myId }); }
   catch (e) { showError(e); render(); }
 }
 async function toggleTag(it, tag) {
