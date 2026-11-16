@@ -6,7 +6,34 @@
 	order rate_limit before basic_auth
 }
 
+# Browser security headers for every response, including static files and
+# Caddy's own 403/404/429. The CSP is structural only: core and module hooks
+# print inline scripts, so a script-src allowlist would need 'unsafe-inline'
+# and add little. frame-ancestors is 'self', not 'none': the ps_adwearslider
+# back-office preview frames the shop. No form-action and no payment=() so a
+# future card gateway isn't blocked. HSTS starts short; raise it to 31536000
+# after a clean week (board item sec-headers). No includeSubDomains/preload:
+# *.adwear.sk resolves to this server without TLS.
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=300"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), usb=()"
+		Content-Security-Policy "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests"
+		-Server
+		-Via
+	}
+}
+
 www.adwear.sk {
+	import security_headers
+	# Error responses (the rate limits' 429) skip the normal route, so their
+	# headers are set here.
+	handle_errors {
+		import security_headers
+	}
 	encode zstd gzip
 	# The back office is hardened by renaming its folder to an unguessable
 	# name (injected at build time from the ADMIN_FOLDER CI secret), so there
@@ -66,6 +93,29 @@ www.adwear.sk {
 			events 150
 			window 1h
 		}
+		# Account, contact and comment forms: cap POSTs per client IP against
+		# password guessing and mail/spam floods. Slugs are the Slovak
+		# ps_meta_lang rewrites; the second match covers the same controllers
+		# without URL rewriting. Cart, checkout and search AJAX are not matched.
+		# Not covered: the newsletter form (posts to the current page) and the
+		# login step inside /objednavka.
+		zone forms_minute {
+			match {
+				method POST
+				path /prihlasit-sa* /registrácia* /registr%C3%A1cia* /obnova-hesla* /kontaktujte-nas* /sledovanie-objednavok-pre-navstevnikov* /module/productcomments/PostComment* /module/productcomments/ReportComment* /module/ps_emailalerts/*
+			}
+			match {
+				method POST
+				query controller=authentication controller=registration controller=password controller=contact controller=guest-tracking
+			}
+			match {
+				method POST
+				query module=productcomments module=ps_emailalerts
+			}
+			key {remote_host}
+			events 10
+			window 1m
+		}
 	}
 
 	reverse_proxy app:80 {
@@ -73,7 +123,14 @@ www.adwear.sk {
 	}
 }
 
-# Redirect the apex to www (canonical host).
+# Redirect the apex to www (canonical host). The http:// block makes plain
+# http://adwear.sk go straight to https://www in one hop instead of first
+# upgrading to https://adwear.sk.
 adwear.sk {
+	import security_headers
+	redir https://www.adwear.sk{uri} permanent
+}
+
+http://adwear.sk {
 	redir https://www.adwear.sk{uri} permanent
 }
