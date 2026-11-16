@@ -106,7 +106,11 @@ RUN sed -i "s/define('_PS_MODE_DEV_', true)/define('_PS_MODE_DEV_', false)/" con
 # Symfony's $request->isSecure() returns false and the BO refuses login with
 # "you cannot connect to the back office until SSL is activated". Setting it in
 # .env.local (loaded by PrestaShop's Dotenv cascade, overriding .env) fixes it.
-RUN echo "PS_TRUSTED_PROXIES=172.16.0.0/12" > .env.local \
+# REMOTE_ADDR, not Caddy's subnet: mod_remoteip (above) swaps REMOTE_ADDR for the
+# visitor's IP, so a subnet never matches and the 9.2 BO dies with "Infinite
+# redirection detected" (2026-11-16). Safe: app has no published port, only Caddy
+# reaches it, and Caddy overwrites X-Forwarded-For/Proto/Host.
+RUN echo "PS_TRUSTED_PROXIES=REMOTE_ADDR" > .env.local \
   && chown www-data:www-data .env.local
 
 # mails/ is a named volume, which hides the image's mails/themes (the git-managed

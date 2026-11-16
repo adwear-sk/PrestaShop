@@ -60,7 +60,8 @@ services:
       # swaps REMOTE_ADDR for the visitor's IP, so a subnet never matches and the
       # 9.2 back office dies with "Infinite redirection detected" (2026-11-16).
       # Safe because app has no published port: only Caddy reaches it, and Caddy
-      # overwrites X-Forwarded-For/Proto/Host.
+      # overwrites X-Forwarded-For/Proto/Host. Web requests read the value from
+      # .env.local in the image (Dockerfile); this one only reaches the CLI.
       PS_TRUSTED_PROXIES: ${PS_TRUSTED_PROXIES:-REMOTE_ADDR}
       # Target shop/language for the malfini_api sync services.
       PS_SHOP_ID: "1"
