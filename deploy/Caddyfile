@@ -113,7 +113,7 @@ www.adwear.sk {
 				query module=productcomments module=ps_emailalerts
 			}
 			key {remote_host}
-			events 10
+			events 20
 			window 1m
 		}
 	}
