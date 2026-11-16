@@ -15,11 +15,18 @@ Several Claude sessions can work the board in parallel, one per assignee. This s
 picks up unassigned work, never pushes, and never touches the shared database's structure or config. Rules for
 everyone else are in [WORKFLOW](../../WORKFLOW.md) §2 and [`adwear-task-board`](../adwear-task-board/SKILL.md) (Who writes).
 
+Main is the coordinator (WORKFLOW §2 Roles): it integrates, runs shared-DB and prod work and answers your
+`NEEDS MAIN:` lines. Item work is yours.
+
+**Secrets:** never print, log, commit or write to the board a secret value (passwords, tokens, API keys, feed URLs
+with keys, the prod admin folder name). Compare values without showing them (hashes, counts, `grep -c`), and
+refer to a finding by file:line and the secret's *kind*.
+
 ## 1. Bind
 
 | Assignee | Checkout | Storefront | Findings + progress |
 |---|---|---|---|
-| `wtN` | `/home/kciariot/AdwearPresta-wtN` (branch `wt/wtN` in main and every nested repo) | `http://wtN.localhost:80N1` | `/home/kciariot/AdwearPresta/.ai/work/wtN/` |
+| `wtN` (wt1 :8011, wt2 :8021, wt3 :8031) | `/home/kciariot/AdwearPresta-wtN` (branch `wt/wtN` in main and every nested repo) | `http://wtN.localhost:80N1` | `/home/kciariot/AdwearPresta/.ai/work/wtN/` |
 
 - `bin/worktree.sh list` (run from main) shows whether the worktree is up. Needed for code and missing →
   `bin/worktree.sh up wtN 80N1`. Research-only items need no worktree.

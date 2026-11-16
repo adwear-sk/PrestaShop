@@ -67,8 +67,12 @@ https://claude.ai/artifact/KsMrS3dk7cnLtxZYYMweEt — schema and operations in
   the session works only on board items assigned to wtN, codes in `~/AdwearPresta-wtN`, keeps research in the
   gitignored `.ai/work/wtN/` and its progress in `.ai/work/wtN/progress.md`. The **main** session owns integration
   (merges `wt/<name>` branches in main and every nested repo, records `repo:sha` on the steps) and everything that
-  touches the shared DB: module installs/upgrades, config writes, `deploy/sql` runs, `bin/pull-prod.sh`. An assignee
-  that needs one of those hands it to main through a step note and stops.
+  touches the shared DB: module installs/upgrades, config writes, `deploy/sql` runs, category/product data,
+  `bin/pull-prod.sh`. An assignee that needs one of those hands it to main through a `NEEDS MAIN:` note and stops.
+- **Roles (since 2026-11-16):** item work runs in the worktrees (wt1–wt3, one item each = the Now lane's WIP 3).
+  **Main coordinates** and stays free to answer handoffs at once: the board, analysis intake for new requests,
+  assigning, integration + re-verification, shared-DB and prod work, push commands, and only short items itself
+  (minutes, not hours). A bigger item main would otherwise take goes to a free worktree instead.
 
 ### 3. Implement
 
