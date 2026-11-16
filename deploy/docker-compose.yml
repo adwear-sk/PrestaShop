@@ -56,7 +56,12 @@ services:
       PS_DOMAIN: ${PS_DOMAIN}
       PS_ENABLE_SSL: "1"
       # Trust Caddy as the TLS-terminating proxy so PrestaShop sees HTTPS.
-      PS_TRUSTED_PROXIES: ${PS_TRUSTED_PROXIES:-172.16.0.0/12}
+      # REMOTE_ADDR, not Caddy's subnet: Apache's mod_remoteip (Dockerfile) already
+      # swaps REMOTE_ADDR for the visitor's IP, so a subnet never matches and the
+      # 9.2 back office dies with "Infinite redirection detected" (2026-11-16).
+      # Safe because app has no published port: only Caddy reaches it, and Caddy
+      # overwrites X-Forwarded-For/Proto/Host.
+      PS_TRUSTED_PROXIES: ${PS_TRUSTED_PROXIES:-REMOTE_ADDR}
       # Target shop/language for the malfini_api sync services.
       PS_SHOP_ID: "1"
       PS_LANGUAGE_ID: "1"
