@@ -162,6 +162,10 @@ override/classes/*
 !override/classes/Connection.php
 !override/classes/Guest.php
 !override/classes/ProductAssembler.php
+!override/classes/Validate.php
+!override/classes/form/
+override/classes/form/*
+!override/classes/form/CustomerAddressFormatter.php
 !override/controllers/
 override/controllers/*
 !override/controllers/front/
