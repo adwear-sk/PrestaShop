@@ -29,6 +29,10 @@
 30 0-22 * * * cd /opt/adwear && flock -n /tmp/malfini-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-stock >> logs/cron-stock.log 2>&1 && touch logs/.ok-sync-stock
 0 4 * * * cd /opt/adwear && flock -n /tmp/malfini-products.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-products >> logs/cron-products.log 2>&1 && touch logs/.ok-sync-products
 0 5 * * * cd /opt/adwear && flock -n /tmp/malfini-prices.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:malfini:sync-prices >> logs/cron-prices.log 2>&1 && touch logs/.ok-sync-prices
+# Category tree (category_migrator): file products the syncs added into the tree and
+# refresh which categories show (a leaf hides until it has a buyable product). After
+# the Anda import (02:15) and the Malfini prices (05:00); the stock syncs run hourly.
+30 5 * * * cd /opt/adwear && flock -n /tmp/catalog-apply.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:catalog:apply >> logs/cron-catalog-apply.log 2>&1 && touch logs/.ok-catalog-apply
 
 # Anda syncs (adwear_anda). Each run downloads its feeds first; they answer
 # only this server's IP. sync-products also applies prices and stock, so new

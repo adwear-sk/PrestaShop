@@ -22,7 +22,8 @@
 #   - the Malfini and Anda syncs, via the logs/.ok-sync-* markers the crontab touches on
 #     success. A container compiled while MySQL restarted on 2026-10-24 lost the
 #     module's commands and the syncs failed for 10 days with the site at 200.
-#     The nightly prune-history.sh touches logs/.ok-prune-history the same way.
+#     The nightly prune-history.sh and the 05:30 catalog apply touch their own
+#     logs/.ok-* markers the same way.
 #   - MySQL: reachable, connections below max_connections, and no burst of
 #     queries killed at max_execution_time (the 2026-11-10 crawler outage held
 #     every connection with 2-minute facet counts while the homepage was cached).
@@ -210,6 +211,7 @@ check_marker sync-prices "$DAILY_MAX_AGE"
 check_marker sync-anda-stock "$STOCK_MAX_AGE"
 check_marker sync-anda-products "$DAILY_MAX_AGE"
 check_marker prune-history "$DAILY_MAX_AGE"
+check_marker catalog-apply "$DAILY_MAX_AGE"
 check_mysql
 
 ADMIN_DIR=$(admin_dir)
