@@ -69,6 +69,9 @@ https://claude.ai/artifact/KsMrS3dk7cnLtxZYYMweEt — schema and operations in
   (merges `wt/<name>` branches in main and every nested repo, records `repo:sha` on the steps) and everything that
   touches the shared DB: module installs/upgrades, config writes, `deploy/sql` runs, category/product data,
   `bin/pull-prod.sh`. An assignee that needs one of those hands it to main through a `NEEDS MAIN:` note and stops.
+- **Linear integration only:** main lands `wt/*` branches by fast-forward, rebase or cherry-pick, never
+  `git merge --no-ff` — the secret scan (`.github/workflows/secret-scan.yml`) walks `--first-parent --no-merges`
+  and would skip commits that arrive through a merge.
 - **Roles (since 2026-11-16):** item work runs in the worktrees (wt1–wt3, one item each = the Now lane's WIP 3).
   **Main coordinates** and stays free to answer handoffs at once: the board, analysis intake for new requests,
   assigning, integration + re-verification, shared-DB and prod work, push commands, and only short items itself
