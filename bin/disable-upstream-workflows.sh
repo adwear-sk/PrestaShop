@@ -14,7 +14,7 @@
 set -euo pipefail
 
 R=adwear-sk/PrestaShop
-KEEP=" .github/workflows/deploy-prod.yml .github/workflows/base-image-check.yml .github/workflows/upstream-check.yml "
+KEEP=" .github/workflows/deploy-prod.yml .github/workflows/base-image-check.yml .github/workflows/upstream-check.yml .github/workflows/secret-scan.yml "
 
 n=0
 while read -r id path; do
