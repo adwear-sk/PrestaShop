@@ -19,6 +19,9 @@ incident notes first — known failure modes: crawler floods on faceted URLs (ps
 ps_log growth stalling stock sync, Malfini all-zero availabilities overnight, modules missing in the app container
 after a MySQL restart silently killing crons, prod timestamps in UTC vs CEST.
 
+Start with `/opt/adwear/diagnose.sh` (read-only, one call) and the matching card in `deploy/RUNBOOK.md`; fixes you
+propose follow that card, and a failure no card covers is worth a new card in the report.
+
 Method: symptom → cheapest checks first (ps, df, logs tail, healthcheck markers) → narrow down → evidence.
 Report: what's wrong (with command output excerpts), root cause confidence, the fix as commands for the user in
 order, and what to watch afterwards. Do not speculate beyond the evidence.

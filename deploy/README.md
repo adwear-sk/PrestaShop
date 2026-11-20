@@ -2,6 +2,8 @@
 
 A push-to-deploy setup for a single PrestaShop store on a Hetzner VPS.
 
+**Something is broken?** Run `/opt/adwear/diagnose.sh` on the VPS and follow [RUNBOOK.md](RUNBOOK.md).
+
 ## How it works
 
 ```
@@ -29,6 +31,8 @@ A push-to-deploy setup for a single PrestaShop store on a Hetzner VPS.
 | `php-prod.ini` | Production PHP/OPcache tuning |
 | `.env.prod.example` | Template for the server's secrets file |
 | `provision.sh` | One-time VPS hardening + Docker install |
+| `diagnose.sh` | Read-only triage of the whole stack; each problem names its card in `RUNBOOK.md` (daily check, first step in any incident) |
+| `RUNBOOK.md` | Incident cards: check → fix → verify for every known failure |
 | `backup.sh` | Nightly verified DB dump + encrypted off-site borg backup of DB, volumes and `/opt/adwear` (cron 03:15) |
 | `borgmatic/config.yaml` | What the off-site backup holds, retention 7d/4w/6m, checks |
 
@@ -168,7 +172,7 @@ off-site copy to healthchecks.
 | Roll back a module | in the module repo `git revert <sha>` (or a range) and push `main`: the deploy rsyncs the tree as pushed, so the old files are back in one run. Don't force-push. `ps_module.version` stays at the newer number (PrestaShop never downgrades) — harmless, the next bump just goes past it; but anything an `upgrade/` script changed in the DB (config, hooks, tabs, tables) stays and must be undone by hand. |
 | See what is live | `/opt/adwear/release.sh list` (newest last); `.env` pins `APP_IMAGE` to the exact `:<sha>`. |
 | See logs | `docker compose logs -f app` |
-| Restore DB | `gunzip < backups/db-<stamp>.sql.gz \| docker compose exec -T mysql mysql -uroot -p"$DB_ROOT_PASSWD" "$DB_NAME"` |
+| Restore DB | `gunzip < backups/db-<stamp>.sql.gz \| docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot "$MYSQL_DATABASE"'` (the password stays inside the container; see [RUNBOOK.md § Data loss](RUNBOOK.md#data-loss) first) |
 
 ## Notes & gotchas
 - **OPcache validation is off** for speed, so module/theme deploys **restart the `app` container** to pick up new code — the module workflows already do this.
