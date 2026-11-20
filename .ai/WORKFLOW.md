@@ -155,6 +155,7 @@ reviews go through [`adwear-retro`](skills/adwear-retro/SKILL.md).
 | [`adwear-module-release`](skills/adwear-module-release/SKILL.md) | Version bump, upgrade script, new-module prod rollout |
 | [`adwear-retro`](skills/adwear-retro/SKILL.md) | Session retro: what's worth saving as a skill, agent or memory note (proposals only) |
 | [`adwear-assignee`](skills/adwear-assignee/SKILL.md) | Run a session as board assignee wtN: own items, own worktree, progress log, own write-back |
+| [`adwear-copy-db-rehearsal`](skills/adwear-copy-db-rehearsal/SKILL.md) | Rehearse data-changing runs on a private DB copy from a worktree; 2nd run = 0; restore shared img files |
 | [`scaffold-adwear-repo`](skills/scaffold-adwear-repo/SKILL.md) | New module/theme repo |
 
 **When to delegate:** the `analyzer` always runs as an agent (keeps the exploration out of the main context). Otherwise spawn agents for self-contained work with a small result (verification, review,
