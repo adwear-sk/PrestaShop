@@ -19,7 +19,7 @@
 # It also watches things that break with the site still looking fine:
 #   - disk usage. On 2026-11-04 crawlers filled the disk through the facet cache
 #     and binlogs, MySQL stopped committing and the whole shop 500'd for 13h.
-#   - the Malfini and Anda syncs, via the logs/.ok-sync-* markers the crontab touches on
+#   - the Malfini, Anda and Canis syncs, via the logs/.ok-* markers the crontab touches on
 #     success. A container compiled while MySQL restarted on 2026-10-24 lost the
 #     module's commands and the syncs failed for 10 days with the site at 200.
 #     The nightly prune-history.sh and the 05:30 catalog apply touch their own
@@ -210,6 +210,8 @@ check_marker sync-products "$DAILY_MAX_AGE"
 check_marker sync-prices "$DAILY_MAX_AGE"
 check_marker sync-anda-stock "$STOCK_MAX_AGE"
 check_marker sync-anda-products "$DAILY_MAX_AGE"
+check_marker canis-fetch "$DAILY_MAX_AGE"
+check_marker canis-sync "$DAILY_MAX_AGE"
 check_marker prune-history "$DAILY_MAX_AGE"
 check_marker catalog-apply "$DAILY_MAX_AGE"
 check_mysql

@@ -40,6 +40,9 @@
 # the 04:00/05:00 Malfini runs. Stock runs hourly at :05, off Malfini's :30.
 15 2 * * * cd /opt/adwear && flock -n /tmp/anda-products.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:anda:sync-products >> logs/cron-anda-products.log 2>&1 && touch logs/.ok-sync-anda-products
 5 * * * * cd /opt/adwear && flock -n /tmp/anda-stock.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:anda:sync-stock >> logs/cron-anda-stock.log 2>&1 && touch logs/.ok-sync-anda-stock
+# Canis (adwear_canis): fetch both feeds, then sync as its own entry (a failed c3 download keeps the last costs).
+40 0 * * * cd /opt/adwear && flock -n /tmp/canis-fetch.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:canis:fetch >> logs/cron-canis-fetch.log 2>&1 && touch logs/.ok-canis-fetch
+0 1 * * * cd /opt/adwear && flock -n /tmp/canis-sync.lock docker compose exec -T -u www-data app php -d memory_limit=-1 bin/console adwear:canis:sync >> logs/cron-canis-sync.log 2>&1 && touch logs/.ok-canis-sync
 
 # The logs/.ok-sync-* markers are touched only on success. healthcheck.sh alerts
 # when one goes stale, because a failing sync cron is otherwise silent: on

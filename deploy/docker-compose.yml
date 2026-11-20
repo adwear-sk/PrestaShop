@@ -68,6 +68,16 @@ services:
       PS_LANGUAGE_ID: "1"
       # NOTE: Malfini credentials are NOT set here — the module stores them in
       # PrestaShop's configuration (DB), entered via the module's admin page.
+      # Canis feeds (adwear_canis): two FTP accesses, c1 = retail price + stock + data, c3 = purchase price.
+      # Values live only in /opt/adwear/.env on the VPS.
+      CANIS_C1_FTP_HOST: ${CANIS_C1_FTP_HOST:-}
+      CANIS_C1_FTP_USER: ${CANIS_C1_FTP_USER:-}
+      CANIS_C1_FTP_PASSWORD: ${CANIS_C1_FTP_PASSWORD:-}
+      CANIS_C1_FTP_PATH: ${CANIS_C1_FTP_PATH:-}
+      CANIS_C3_FTP_HOST: ${CANIS_C3_FTP_HOST:-}
+      CANIS_C3_FTP_USER: ${CANIS_C3_FTP_USER:-}
+      CANIS_C3_FTP_PASSWORD: ${CANIS_C3_FTP_PASSWORD:-}
+      CANIS_C3_FTP_PATH: ${CANIS_C3_FTP_PATH:-}
     volumes:
       - ps-img:/var/www/html/img
       - ps-upload:/var/www/html/upload
@@ -87,6 +97,7 @@ services:
       - ./custom/modules/adwear_shippay_details:/var/www/html/modules/adwear_shippay_details
       - ./custom/modules/adwear_quote:/var/www/html/modules/adwear_quote
       - ./custom/modules/adwear_anda:/var/www/html/modules/adwear_anda
+      - ./custom/modules/adwear_canis:/var/www/html/modules/adwear_canis
       - ./custom/themes/adwear:/var/www/html/themes/adwear
     depends_on:
       mysql:
