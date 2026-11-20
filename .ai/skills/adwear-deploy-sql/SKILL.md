@@ -38,9 +38,11 @@ produces: deploy/sql/YYYY-MM-DD-<what>.sql, run twice locally with 0 changes on 
 
 ```bash
 f=deploy/sql/<file>.sql
-for i in 1 2; do docker exec -i adwearpresta-mysql-1 mysql -uroot -p"$PW" -vv prestashop < "$f" | grep -E 'affected|Changed|Records'; done
+for i in 1 2; do docker exec -i adwearpresta-mysql-1 mysql -uroot -p"$PW" --default-character-set=utf8mb4 -vv prestashop < "$f" 2>&1 | grep -E 'ERROR|affected|Changed|Records'; done
 ```
-(`$PW` = `database_password` from `app/config/parameters.php`.) Run 1 changes what you expect; **run 2 must report
+(`$PW` = `database_password` from `app/config/parameters.php`.) `--default-character-set=utf8mb4` matches
+`deploy/migrate.sh` on prod: without it the client talks latin1, `COLLATE utf8mb4_bin` guards fail with ERROR 1253
+and the batch stops at the first statement. Run 1 changes what you expect; **run 2 must report
 `Changed: 0` / `0 rows affected` everywhere**. Then check the front/BO shows the change (clear Smarty cache if it renders).
 
 ## Then
