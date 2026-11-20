@@ -36,9 +36,10 @@ cat >> "/home/$DEPLOY_USER/.ssh/authorized_keys"
 chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh/authorized_keys"
 chmod 600 "/home/$DEPLOY_USER/.ssh/authorized_keys"
 
-echo ">>> Harden SSH (no root login, no passwords)"
+echo ">>> Harden SSH (no root login, no passwords, no X11)"
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sed -i 's/^#\?X11Forwarding.*/X11Forwarding no/' /etc/ssh/sshd_config
 systemctl restart ssh || systemctl restart sshd
 
 echo ">>> Firewall (SSH + HTTP + HTTPS only)"
@@ -54,8 +55,8 @@ install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" \
   "$APP_DIR" \
   "$APP_DIR/custom/modules/category_migrator" \
   "$APP_DIR/custom/modules/malfini_api" \
-  "$APP_DIR/custom/themes/adwear" \
-  "$APP_DIR/backups"
+  "$APP_DIR/custom/themes/adwear"
+install -d -m 0700 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$APP_DIR/backups"
 
 cat <<EOF
 
@@ -63,7 +64,7 @@ cat <<EOF
 Provisioning done. Next steps (as the deploy user):
 
   1. Copy deploy/docker-compose.yml, deploy/Caddyfile into $APP_DIR/
-  2. Copy deploy/.env.prod.example -> $APP_DIR/.env and fill it in
+  2. Copy deploy/.env.prod.example -> $APP_DIR/.env, chmod 600 it, fill it in
   3. Log in to GHCR once so the VPS can pull the private image:
        echo <GHCR_READ_PAT> | docker login ghcr.io -u <github-user> --password-stdin
   4. Point DNS: A record  www.adwear.sk -> this server's IP  (and adwear.sk)

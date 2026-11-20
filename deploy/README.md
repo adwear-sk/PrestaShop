@@ -83,7 +83,7 @@ cd /opt/adwear
 #   docker build -t adwear-caddy:latest deploy/caddy
 #   docker save adwear-caddy:latest | gzip | ssh deploy@<vps-ip> 'gunzip | docker load'
 # then create the secrets file:
-cp .env.prod.example .env   # edit .env with real passwords
+cp .env.prod.example .env && chmod 600 .env   # edit .env with real passwords
 ```
 
 ### 7. Let the VPS pull the private image
@@ -173,7 +173,7 @@ off-site copy to healthchecks.
 ## Notes & gotchas
 - **OPcache validation is off** for speed, so module/theme deploys **restart the `app` container** to pick up new code — the module workflows already do this.
 - **Never deploy `develop` directly.** The `production` branch is the safety gate.
-- **`.env` on the VPS holds all secrets** and is never committed.
+- **`.env` on the VPS holds all secrets** and is never committed. Keep it owned by `deploy`, mode `600`, like the dumps in `backups/`.
 - The custom theme repo doesn't exist yet — create it when you duplicate
   Classic (`themes/adwear`), give it the same 3 secrets, and a workflow that
   runs `cd _dev && npm ci && npm run build` then rsyncs to

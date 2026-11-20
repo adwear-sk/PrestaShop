@@ -44,6 +44,10 @@ fail() {
 }
 trap 'fail "line $LINENO exited $?"' ERR
 
+# Dumps hold every customer's data: owner-only, and the directory too.
+umask 077
+chmod 700 "$BACKUP_DIR"
+
 # One run at a time: the first off-site seed can outlast a night.
 exec 9>/tmp/adwear-backup.lock
 if ! flock -n 9; then
